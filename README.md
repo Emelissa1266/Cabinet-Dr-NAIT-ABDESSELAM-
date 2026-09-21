@@ -360,53 +360,6 @@ Doctor / Nurse / Secretary
 
 Each user has permissions according to their role.
 
----
-
-# 🏗️ Architecture
-
-The project follows a client-server architecture.
-
-```text
-                    ┌──────────────┐
-                    │    Figma     │
-                    │  Design UI   │
-                    └──────┬───────┘
-                           │
-                       Figma MCP
-                           │
-                           ▼
-                    ┌──────────────┐
-                    │    Codex     │
-                    └──────┬───────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────┐
-│                  FRONTEND                   │
-│                                             │
-│              Next.js / React                │
-│              TypeScript                    │
-│              Tailwind CSS                  │
-│                                             │
-└──────────────────────┬──────────────────────┘
-                       │
-                   REST API
-                       │
-                       ▼
-┌─────────────────────────────────────────────┐
-│                  BACKEND                    │
-│                                             │
-│                 Django                      │
-│           Django REST Framework             │
-│                                             │
-└──────────────────────┬──────────────────────┘
-                       │
-                       ▼
-                 ┌───────────┐
-                 │ PostgreSQL│
-                 └───────────┘
-```
-
----
 
 # 📁 Project Structure
 
@@ -459,14 +412,12 @@ clinic-management/
 ## Design
 
 - Figma
-- Figma MCP
 - Figma Design System
 
 ## Development
 
 - Git
 - GitHub
-- Codex
 - VS Code
 
 ---
@@ -505,10 +456,6 @@ The project uses the following workflow:
 Figma
   ↓
 Design System
-  ↓
-Figma MCP
-  ↓
-Codex
   ↓
 Next.js
   ↓
