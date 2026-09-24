@@ -1,4 +1,4 @@
-# Clinic Management frontend — Phase 1
+# Clinic Management frontend — Doctor V1
 
 Next.js 16.3.5, React 19.2.8, TypeScript, Tailwind CSS 4, npm.
 
@@ -34,9 +34,26 @@ The mock service works only with `NODE_ENV=development`. Production login reject
 
 - `/` redirects to `/login`.
 - `/login` implements the Figma login screen.
-- `/dashboard` contains the application shell and a neutral placeholder, gated by the development session.
+- `/dashboard` contains the Doctor dashboard, gated by the development session.
+- `/patients` and `/patients/[id]` provide the patient list and records.
+- `/agenda` provides the duration-aware calendar and appointment details.
+- `/interventions` provides the surgical programme and clinical details.
+- `/care` provides configurable care categories, treatment programmes and session history.
+- `/prescriptions` provides prescription history, a medication editor and draft details.
+- `/phototheque` provides a filterable local demo-photo grid and detail viewer.
+- `/billing` provides invoice history, line items, balances and payment/invoice statuses.
 
-Future module navigation is role-filtered but unavailable; it does not link to missing pages. Patients, Agenda, Consultations, Interventions, Soins, Ordonnances, Photothèque and Facturation are not implemented. Search, notifications and settings remain unavailable.
+All Doctor module links are enabled. Nurse, Secretary and Administrator interfaces are not implemented. Global search, notifications and settings remain unavailable.
+
+## Frontend demonstration boundaries
+
+The four new modules reuse the existing Figma-derived components and styles; no additional Figma calls or new design system were used. Each feature owns its types, fixtures, service adapter and interactive components. Server route components load initial data; loading routes and empty filter states are included.
+
+Care categories and treatment programmes can be created and edited. A treatment references a patient directly, without a required consultation. Completed/remaining sessions are derived from read-only session history; the Doctor cannot execute or validate nursing sessions. New programmes and prescriptions are held in component memory and reset on a full reload or route remount. Prescription saves create demonstration drafts only.
+
+Photo fixtures reuse the existing local images. These public assets are for demonstration only: real medical images must use authenticated metadata and private media URLs via `features/phototheque/services/photo-service.ts`. There are no sharing controls or cloud uploads.
+
+Billing is read-only. Draft invoices are excluded from issued/paid/outstanding summary totals. Payment processing, invoice generation, prescription printing/PDF, backend persistence and Django are deliberately not implemented.
 
 ## Structure and components
 
@@ -62,7 +79,7 @@ public/icons/           Exact exported Figma SVG assets
 public/images/          Exact exported Figma reception and profile images
 ```
 
-Feature folders, shared hooks and extra type modules should be introduced when they have real consumers. No empty module scaffolds or additional runtime dependencies were added. Server Components are used for route composition and static content; interactive forms, session state and the shell boundary use Client Components.
+Feature folders now include `auth`, `doctor-dashboard`, `patients`, `agenda`, `interventions`, `care`, `prescriptions`, `phototheque` and `billing`. Shared UI includes DetailDialog, StatusBadge, ModuleSummary, ModuleLoading and scoped clinical styles. No additional runtime dependencies were added. Server Components compose routes; interactive forms and filters use Client Components.
 
 ## Design references
 
@@ -74,7 +91,7 @@ Feature folders, shared hooks and extra type modules should be introduced when t
 
 The shared CSS tokens follow the design-system palette; login-specific slate colors and teal controls follow the login frame. Plus Jakarta Sans is loaded by `next/font/google`. A fresh build may need network access to fetch the font. Images and icons are local files, so Figma's temporary export links are not runtime dependencies.
 
-Desktop retains the split login and 230px sidebar / 56px header. Tablet and mobile use a single-column login and a modal navigation drawer with focus containment, Escape dismissal and scroll locking. Touch targets expand on mobile. The reference dashboard contains no breadcrumb, so Breadcrumb is prepared for future nested routes but not added there. The consultations item is prepared as requested; no icon was invented where the source shell supplied none.
+Desktop retains the split login and 230px sidebar / 56px header. Tablet and mobile use a single-column login and a modal navigation drawer with focus containment, Escape dismissal and scroll locking. Tables scroll horizontally on smaller screens. Patient records reuse the shared breadcrumb. The eight Doctor navigation entries follow the implemented shell.
 
 Security, encryption, logging and certification wording on the login is retained from the supplied visual design. Those claims are design copy only and are **not implemented or verified** by this mock frontend; they must be reviewed against the real backend and hosting before release.
 
@@ -86,8 +103,10 @@ node node_modules/typescript/bin/tsc --noEmit --incremental false
 npm.cmd run build
 ```
 
-The production build creates the login and shell routes, but does not enable demo authentication. `server/` is untouched.
+The production build includes all Doctor V1 routes, but does not enable demo authentication. `server/` is untouched.
 
 Verified on 22 September 2026: ESLint, standalone TypeScript and the production build passed. Browser checks covered required fields, password visibility, loading, rejected credentials, all four demo roles, reload persistence, logout, unauthenticated redirects, mobile menu/Escape, mobile/tablet overflow and production rejection of mock credentials. A fresh browser session had no console warnings or errors after fixing explicit icon dimensions.
+
+Doctor V1 continuation verified on 24 September 2026: TypeScript checks for each new module, full ESLint and production build passed. Browser checks covered care category creation/editing, treatment creation/editing and completion validation, prescription medication addition/removal and draft saving, photo viewing/filtering, invoice balances/status filters, empty states and tablet overflow. Recent development logs showed no new browser errors or warnings. The existing development server intermittently reported a Google Fonts fetch warning; the production build succeeded. No backend files or dependencies changed.
 
 `next dev` also generated `AGENTS.md` and `CLAUDE.md` in this directory. These are Next.js tool-generated instructions, not application features.

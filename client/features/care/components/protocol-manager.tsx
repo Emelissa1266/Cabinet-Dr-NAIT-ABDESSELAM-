@@ -1,0 +1,19 @@
+"use client";
+import { useState } from "react";
+import { DetailDialog } from "@/components/ui/detail-dialog";
+import { StatusBadge } from "@/components/ui/status-badge";
+import type { CareCategory, CareProtocol } from "../types";
+import { careService } from "../services/care-service";
+import ui from "@/components/ui/clinical.module.css";
+import styles from "./care-workspace.module.css";
+
+export function ProtocolManager({ protocols, categories, onChange, onCategories, editor, setEditor }: {
+ protocols: CareProtocol[]; categories: CareCategory[]; onChange: (protocol: CareProtocol) => void; onCategories: () => void;
+ editor: CareProtocol | "new" | null; setEditor: (editor: CareProtocol | "new" | null) => void;
+}) {
+ const [message, setMessage] = useState("");
+ const [busy, setBusy] = useState(false);
+ return <section className={styles.catalogue}><header><div><h2>Types de soins & Protocoles</h2><p>Catalogue sous gouvernance médicale</p></div><div className={ui.actions}><button className={styles.secondaryButton} onClick={onCategories}>Gérer les catégories</button><button className={styles.primaryButton} onClick={() => { setMessage(""); setEditor("new"); }}>+ Nouveau type</button></div></header><div className={styles.protocolGrid}>{protocols.map(protocol => <article key={protocol.id}><div><h3>{protocol.name}</h3><StatusBadge tone={protocol.active ? "teal" : "neutral"}>{protocol.active ? "Actif" : "Inactif"}</StatusBadge></div><small>{categories.find(c => c.id === protocol.categoryId)?.name} · {protocol.durationMinutes} min</small><p>{protocol.instructions || "Aucune instruction."}</p><button className={styles.editLink} onClick={() => { setMessage(""); setEditor(protocol); }} aria-label={`Modifier le type ${protocol.name}`}>Modifier le protocole</button></article>)}</div>{!protocols.length && <p className={styles.empty}>Aucun type de soin. Créez le premier protocole.</p>}
+ <DetailDialog title={editor === "new" ? "Nouveau type de soin" : "Modifier le protocole"} open={Boolean(editor)} onClose={() => setEditor(null)}>{editor && <form className={ui.form} onSubmit={async event => { event.preventDefault(); const form = new FormData(event.currentTarget); const name = String(form.get("name")).trim(); if (!name) { setMessage("Le nom est obligatoire."); return; } setBusy(true); try { onChange(await careService.prepareProtocol({ name, categoryId: String(form.get("category")), durationMinutes: Number(form.get("duration")), instructions: String(form.get("instructions")).trim(), active: form.get("active") === "yes" }, editor === "new" ? undefined : editor.id)); setEditor(null); } catch { setMessage("Impossible d’enregistrer le protocole."); } finally { setBusy(false); } }}>
+ <label>Nom du type<input name="name" required maxLength={120} defaultValue={editor === "new" ? "" : editor.name}/></label><label>Catégorie<select name="category" required defaultValue={editor === "new" ? "" : editor.categoryId}><option value="" disabled>Sélectionner une catégorie</option>{categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label><label>Durée prévue (min)<input name="duration" type="number" min={5} max={480} required defaultValue={editor === "new" ? 30 : editor.durationMinutes}/></label><label>Instructions / protocole<textarea name="instructions" maxLength={2000} defaultValue={editor === "new" ? "" : editor.instructions}/></label><label>Disponibilité<select name="active" defaultValue={editor !== "new" && !editor.active ? "no" : "yes"}><option value="yes">Actif</option><option value="no">Inactif</option></select></label><p>Modifications de démonstration, sans persistance.</p>{message && <p role="alert">{message}</p>}<button className={styles.primaryButton} type="submit" disabled={busy}>Enregistrer le type</button></form>}</DetailDialog></section>;
+}

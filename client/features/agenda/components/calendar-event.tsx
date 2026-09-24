@@ -4,7 +4,7 @@ export function CalendarEvent({ item, onSelect }: { item: PositionedAppointment;
   const { appointment, start, end, column, columns } = item;
   const height = (end - start) * 1.6 - 3;
   return <button className={styles.event} data-category={appointment.category} data-calendar-event={appointment.id}
-    style={{ top: (start - 480) * 1.6, height, left: `calc(${column / columns * 100}% + 4px)`, width: `calc(${100 / columns}% - 8px)` }}
+    style={{ top: (start - 480) * 1.6, height, paddingBlock: height < 24 ? 0 : undefined, left: `calc(${column / columns * 100}% + 4px)`, width: `calc(${100 / columns}% - 8px)` }}
     aria-label={`${appointment.patient}, ${appointment.type}, ${appointment.start} – ${appointment.end}, ${appointment.status}`}
     title={`${appointment.patient} · ${appointment.type} · ${appointment.start} – ${appointment.end}`} onClick={onSelect}>
     <strong>{appointment.patient}</strong>
