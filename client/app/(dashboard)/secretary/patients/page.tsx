@@ -1,0 +1,1 @@
+import {SecretaryPatients} from "@/features/secretary/components/secretary-patients";export default async function Page({searchParams}:{searchParams:Promise<{q?:string;new?:string}>}){const p=await searchParams;return <SecretaryPatients key={(p.q??"")+(p.new??"")} query={p.q} create={p.new==="1"}/>;}

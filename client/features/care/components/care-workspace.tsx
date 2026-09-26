@@ -1,4 +1,5 @@
 "use client";
+import {useClinic} from "@/features/clinic/components/clinic-provider";
 import { useState } from "react";
 import { Icon } from "@/components/shared/icon";
 import { DetailDialog } from "@/components/ui/detail-dialog";
@@ -21,7 +22,7 @@ function shiftDate(date: string, days: number) {
  return value.toISOString().slice(0, 10);
 }
 export function CareWorkspace({ initialData, patients }: { initialData: CareData; patients: Patient[] }) {
- const [data, setData] = useState(initialData);
+ const {medicalCare:data,setMedicalCare:setData}=useClinic();
  const [tab, setTab] = useState<"planning" | "protocols">("planning");
  const [protocolEditor, setProtocolEditor] = useState<CareProtocol | "new" | null>(null);
  const [date, setDate] = useState(initialData.planningDate);

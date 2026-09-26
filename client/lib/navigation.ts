@@ -14,5 +14,5 @@ export const navigation: readonly NavigationItem[] = [
   { label: "Photothèque", href: "/phototheque", icon: "phototheque", roles: ["ADMIN", "DOCTOR", "NURSE"], available: true },
   { label: "Facturation", href: "/billing", icon: "billing", roles: ["ADMIN", "DOCTOR", "SECRETARY"], available: true },
 ];
-export function navigationForRole(role: Role) { return navigation.filter((item) => item.roles.includes(role)).map((item) => ({ ...item, available: item.available && (item.href === "/dashboard" || role === "DOCTOR") })); }
+export function navigationForRole(role: Role) { if (role === "SECRETARY") return navigation.filter(item => ["/dashboard", "/patients", "/agenda", "/billing"].includes(item.href)).map(item => ({...item, href: `/secretary${item.href}`, available: true})); if (role === "NURSE") return navigation.filter(item => ["/dashboard", "/patients", "/agenda", "/care", "/phototheque", "/billing"].includes(item.href)).map(item => ({ ...item, href: `/nurse${item.href}`, available: true })); return navigation.filter((item) => item.roles.includes(role)).map((item) => ({ ...item, available: item.available && (item.href === "/dashboard" || role === "DOCTOR") })); }
 export const roleLabels: Record<Role, string> = { ADMIN: "Administrateur", DOCTOR: "Chirurgien plasticien", NURSE: "Personnel soignant", SECRETARY: "Secrétariat" };

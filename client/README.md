@@ -1,4 +1,4 @@
-# Clinic Management frontend — Doctor V1
+# Clinic Management frontend — Doctor & Nurse V1
 
 Next.js 16.3.5, React 19.2.8, TypeScript, Tailwind CSS 4, npm.
 
@@ -43,7 +43,7 @@ The mock service works only with `NODE_ENV=development`. Production login reject
 - `/phototheque` provides a filterable local demo-photo grid and detail viewer.
 - `/billing` provides invoice history, line items, balances and payment/invoice statuses.
 
-All Doctor module links are enabled. Nurse, Secretary and Administrator interfaces are not implemented. Global search, notifications and settings remain unavailable.
+All Doctor module links are enabled. Nurse V1 has dedicated routes below. Secretary and Administrator interfaces are not implemented. Doctor global search/notifications and shared settings remain unavailable.
 
 ## Frontend demonstration boundaries
 
@@ -110,3 +110,21 @@ Verified on 22 September 2026: ESLint, standalone TypeScript and the production 
 Doctor V1 continuation verified on 24 September 2026: TypeScript checks for each new module, full ESLint and production build passed. Browser checks covered care category creation/editing, treatment creation/editing and completion validation, prescription medication addition/removal and draft saving, photo viewing/filtering, invoice balances/status filters, empty states and tablet overflow. Recent development logs showed no new browser errors or warnings. The existing development server intermittently reported a Google Fonts fetch warning; the production build succeeded. No backend files or dependencies changed.
 
 `next dev` also generated `AGENTS.md` and `CLAUDE.md` in this directory. These are Next.js tool-generated instructions, not application features.
+
+## Nurse V1
+
+Implemented from the supplied Nurse screenshot, without Figma MCP or new dependencies. Sign in as `infirmier.demo` with the development password above; the shell redirects to `/nurse/dashboard`.
+
+- `/nurse/dashboard`: assigned daily care, summary and shared execution panel.
+- `/nurse/agenda`: date navigation, day/week lists, search, status filters, selected-care details. Concurrent appointments use separate columns with local horizontal scrolling.
+- `/nurse/care`: care/category filters, start, draft, actual laser parameters, tolerance, reactions, observations, local incident reports and combined completion/validation.
+- `/nurse/patients` and `/nurse/patients/[id]`: search, essential clinical information, prescribed protocols, nursing history, relevant interventions and photo links.
+- `/nurse/phototheque`: patient/category/before-after filters, comparison and a read-only photo viewer using existing local demo assets.
+
+`features/nurse/data` contains fixtures; `types` contains contracts; `services` contains the replaceable data adapter, session transitions and agenda collision grouping; `components` contains the Nurse UI. The existing shell and shared dialogs, badges, icons and loading states are reused. Authentication and Doctor feature files are unchanged.
+
+A provider shared by Nurse routes keeps saved drafts and session updates during client navigation. Reloading or signing out resets the mock data. Validation checks required execution fields, laser values and adverse-reaction notes. A completed session is locked and counted once; prescribed protocols remain unchanged. Reports are local records, not messages sent to a doctor. The demo planning date is 21 September 2026; overlapping appointments are also available on 25 September.
+
+Role redirects and assignment checks are frontend demonstrations, not server authorization. A future Supabase/API adapter must enforce authenticated access, assignments, private photo delivery and durable, atomic validation. No backend, database, cloud storage or outbound communication was added.
+
+Regression checks: `node --test features/nurse/services/session-state.test.mjs`.

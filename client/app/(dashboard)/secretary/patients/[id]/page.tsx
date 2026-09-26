@@ -1,0 +1,1 @@
+import {SecretaryPatientDetail} from "@/features/secretary/components/secretary-patients";export default async function Page({params}:{params:Promise<{id:string}>}){const {id}=await params;return <SecretaryPatientDetail id={id}/>;}

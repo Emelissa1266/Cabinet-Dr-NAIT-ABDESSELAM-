@@ -1,0 +1,1 @@
+import {SecretaryAgenda} from "@/features/secretary/components/secretary-agenda";export default async function Page({searchParams}:{searchParams:Promise<{new?:string;patient?:string;appointment?:string}>}){const p=await searchParams;return <SecretaryAgenda key={JSON.stringify(p)} create={p.new==="1"} patientId={p.patient} appointmentId={p.appointment}/>;}

@@ -2,7 +2,7 @@ export interface CareCategory { id: string; name: string; description: string; a
 export type TreatmentStatus = "Planifié" | "En cours" | "Suspendu" | "Terminé";
 export interface CareSession { id: string; date: string; status: "Réalisée" | "Planifiée" | "Annulée"; notes: string }
 export interface CareNurse { id: string; name: string; initials: string }
-export interface CareProtocol { id: string; categoryId: string; name: string; instructions: string; durationMinutes: number; active: boolean }
+export interface CareProtocol { description?:string; defaultSessions?:number; defaultPricePerSession?:number; requiredParameters?:("device"|"wavelength"|"fluence"|"spotSize"|"frequency")[]; id: string; categoryId: string; name: string; instructions: string; durationMinutes: number; active: boolean }
 export interface CarePlanning {
  date: string; time: string; room: string; nurseId: string; doctor: string;
  durationMinutes: number; instructions: string; startedAt?: string; alert?: string;
