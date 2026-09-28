@@ -1,0 +1,9 @@
+"use client";
+import {useState} from "react";
+import {useRouter} from "next/navigation";
+import {Icon} from "@/components/shared/icon";
+import {DetailDialog} from "@/components/ui/detail-dialog";
+import {secretaryProfile} from "../data/mock-secretary";
+import styles from "./secretary.module.css";
+export function SecretaryHeader({date,onOpenNavigation}:{date:string;onOpenNavigation:()=>void}){const router=useRouter();const [query,setQuery]=useState("");const [panel,setPanel]=useState("");return <><header className="app-header"><button className="mobile-menu-button" aria-label="Ouvrir la navigation" onClick={onOpenNavigation}>Menu</button><strong className={styles.headerTitle}>• Accueil & Secrétariat Administratif</strong><span className={styles.headerDate}>{date}</span><form className={styles.headerSearch} onSubmit={e=>{e.preventDefault();router.push("/secretary/patients?q="+encodeURIComponent(query.trim()));}}><Icon name="search" size={13}/><input aria-label="Recherche administrative" placeholder="Rechercher un patient…" value={query} onChange={e=>setQuery(e.target.value)}/><button>Rechercher</button></form><button aria-label="Notifications administratives" onClick={()=>setPanel("Notifications")}><Icon name="notifications"/></button><button className={styles.headerIdentity} onClick={()=>setPanel("Mon profil")}><strong>{secretaryProfile.name}</strong><small>{secretaryProfile.title}</small></button></header><DetailDialog title={panel} open={Boolean(panel)} onClose={()=>setPanel("")}>{panel==="Mon profil"?<><h3>{secretaryProfile.name}</h3><p>{secretaryProfile.title} · Poste accueil</p></>:<><p>Les alertes administratives actualisées sont disponibles dans votre tableau de bord.</p><button className={styles.button} onClick={()=>{setPanel("");router.push("/secretary/dashboard");}}>Voir les alertes</button></>}</DetailDialog></>;}
+

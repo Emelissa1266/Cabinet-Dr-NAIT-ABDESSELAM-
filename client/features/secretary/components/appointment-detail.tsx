@@ -1,0 +1,16 @@
+"use client";
+import Link from "next/link";
+import {useState} from "react";
+import {useSecretary} from "./secretary-provider";
+import {StatusBadge} from "@/components/ui/status-badge";
+import {patientName,endTime,invoiceBalance} from "../services/admin-state";
+import {formatDate,formatAmount} from "@/lib/clinical-format";
+import type {AdminAppointment,AppointmentStatus} from "../types";
+import styles from "./secretary.module.css";
+export function AppointmentDetail({appointment:a,onEdit}:{appointment:AdminAppointment;onEdit:()=>void}){
+ const {data,execute}=useSecretary();const [cancel,setCancel]=useState(false);const [message,setMessage]=useState("");const p=data.patients.find(p=>p.id===a.patientId)!;const invoices=data.invoices.filter(i=>i.appointmentId===a.id);
+ const next:Partial<Record<AppointmentStatus,AppointmentStatus>>={"À confirmer":"Confirmé","Confirmé":"Arrivé","Arrivé":"En consultation","En consultation":"Terminé"};
+ function status(value:AppointmentStatus){try{execute({type:"status",id:a.id,status:value});setMessage("Statut mis à jour.");setCancel(false);}catch(e){setMessage((e as Error).message);}}
+ return <section className={styles.panel}><p className={styles.eyebrow}>Rendez-vous · {a.id}</p><div className={styles.heading}><h2>{patientName(p)}</h2><StatusBadge tone={a.status==="Annulé"?"error":a.status==="À confirmer"?"warning":"teal"}>{a.status}</StatusBadge></div><p>{data.types.find(t=>t.id===a.typeId)?.label}</p><div className={styles.inset}><strong>{formatDate(a.date)} · {a.start} – {endTime(a)}</strong><p>{a.duration} min · {data.doctors.find(d=>d.id===a.doctorId)?.name}</p><p>{a.room}</p></div><p>{p.phone}</p><h3>Motif administratif</h3><p>{a.reason||"Non renseigné"}</p><h3>Notes d’accueil</h3><p>{a.notes||"Aucune note administrative."}</p><p>Solde associé : {invoices.length?formatAmount(invoices.reduce((n,i)=>n+invoiceBalance(data,i),0)):"Pas de facture associée"}</p><div className={styles.stack}>{next[a.status]&&<button className={styles.button+" "+styles.primary} onClick={()=>status(next[a.status]!)}>{a.status==="À confirmer"?"Confirmer":a.status==="Confirmé"?"Marquer arrivé":a.status==="Arrivé"?"Entrée en consultation":"Fin de rendez-vous"}</button>}{!["Terminé","Annulé","En consultation"].includes(a.status)&&<><button className={styles.button} onClick={onEdit}>Modifier / déplacer</button><button className={styles.button} onClick={()=>setCancel(true)}>Annuler le rendez-vous</button></>}<Link className={styles.button} href={"/secretary/patients/"+p.id}>Voir la fiche administrative</Link>{a.status!=="Annulé"&&<Link className={styles.button} href={"/secretary/billing?new=1&patient="+p.id+"&appointment="+a.id}>Créer une facture</Link>}<Link className={styles.button} href={"/secretary/billing?patient="+p.id}>Enregistrer un règlement</Link></div>{cancel&&<div className={styles.error}><p>Annuler ce rendez-vous ? Son historique sera conservé.</p><div className={styles.actions}><button className={styles.button} onClick={()=>status("Annulé")}>Confirmer l’annulation</button><button className={styles.button} onClick={()=>setCancel(false)}>Conserver le rendez-vous</button></div></div>}{message&&<p role="status" className={styles.feedback}>{message}</p>}</section>;
+}
+
