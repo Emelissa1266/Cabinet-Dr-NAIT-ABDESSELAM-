@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     AgendaDayView,
+    AgendaStaffView,
     AgendaWeekView,
     AppointmentRescheduleViewSet,
     AppointmentStaffViewSet,
@@ -25,6 +26,7 @@ router.register("appointment-reschedules", AppointmentRescheduleViewSet, basenam
 
 urlpatterns = [
     path("", include(router.urls)),
+    path("agenda/staff/", AgendaStaffView.as_view(), name="agenda-staff"),
     path("availability/", AvailabilityView.as_view(), name="availability"),
     path("agenda/day/", AgendaDayView.as_view(), name="agenda-day"),
     path("agenda/week/", AgendaWeekView.as_view(), name="agenda-week"),

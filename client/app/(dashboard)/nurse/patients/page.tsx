@@ -1,6 +1,6 @@
-import { NursePatients } from "@/features/nurse/components/nurse-patients";
+import { PatientList } from "@/features/patients/components/patient-list";
 export default async function Page({ searchParams }: {
     searchParams: Promise<{
         q?: string;
     }>;
-}) { const { q } = await searchParams; return <NursePatients key={q} initialQuery={q}/>; }
+}) { const { q } = await searchParams; return <PatientList basePath="/nurse/patients" initialQuery={q ?? ""} />; }

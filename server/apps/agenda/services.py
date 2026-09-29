@@ -70,11 +70,13 @@ def validate_no_closure(*, start_at, end_at):
         raise ValidationError("Appointment overlaps a clinic closure.")
 
 
-def validate_no_conflicts(*, staff_ids, start_at, end_at, exclude_appointment_id=None):
-    appointments = Appointment.objects.select_for_update().filter(
+def validate_no_conflicts(*, staff_ids, start_at, end_at, exclude_appointment_id=None, lock=True):
+    appointments = Appointment.objects.filter(
         start_at__lt=end_at,
         end_at__gt=start_at,
     ).exclude(status__in=NON_BLOCKING_STATUSES)
+    if lock:
+        appointments = appointments.select_for_update()
     if exclude_appointment_id:
         appointments = appointments.exclude(id=exclude_appointment_id)
     primary_conflict = appointments.filter(primary_staff_id__in=staff_ids).exists()
@@ -254,7 +256,7 @@ def cancel_appointment(*, appointment, actor, reason, request=None):
 
 @transaction.atomic
 def reschedule_appointment(*, appointment, actor, new_start_at, new_end_at=None, reason="", request=None):
-    locked = Appointment.objects.select_for_update().select_related(
+    locked = Appointment.objects.select_for_update(of=("self",)).select_related(
         "patient",
         "appointment_type",
         "primary_staff",
@@ -323,7 +325,7 @@ def find_available_slots(*, staff, appointment_type, date_from, date_to, duratio
                 try:
                     validate_no_closure(start_at=current, end_at=slot_end)
                     validate_no_time_off(staff_id=staff.id, start_at=current, end_at=slot_end)
-                    validate_no_conflicts(staff_ids=[staff.id], start_at=current, end_at=slot_end)
+                    validate_no_conflicts(staff_ids=[staff.id], start_at=current, end_at=slot_end, lock=False)
                 except ValidationError:
                     current += interval
                     continue

@@ -15,7 +15,10 @@ export function LoginForm() {
   const [errors, setErrors] = useState<{ username?: string; password?: string }>({});
   const [error, setError] = useState("");
   const [help, setHelp] = useState(false);
-  useEffect(() => { if (ready && user) router.replace("/dashboard"); }, [ready, user, router]);
+  useEffect(() => {
+    if (!ready || !user) return;
+    router.replace(user.role === "NURSE" ? "/nurse/dashboard" : user.role === "SECRETARY" ? "/secretary/dashboard" : "/dashboard");
+  }, [ready, user, router]);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (loading) return;
@@ -30,7 +33,9 @@ export function LoginForm() {
       return;
     }
     setLoading(true);
-    try { await login({ username, password }, data.get("remember") === "on"); router.replace("/dashboard"); }
+    try {
+      await login({ username, password }, data.get("remember") === "on");
+    }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Connexion impossible. Veuillez réessayer."); }
     finally { setLoading(false); }
   }

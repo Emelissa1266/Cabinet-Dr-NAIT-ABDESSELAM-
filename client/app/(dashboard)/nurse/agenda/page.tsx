@@ -1,2 +1,2 @@
-import { NurseAgenda } from "@/features/nurse/components/nurse-agenda";
-export default function Page() { return <NurseAgenda />; }
+import { AgendaCalendar } from "@/features/agenda/components/agenda-calendar";
+export default function Page() { return <AgendaCalendar basePath="/nurse/agenda" />; }

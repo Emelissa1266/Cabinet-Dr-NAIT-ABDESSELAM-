@@ -28,6 +28,28 @@ class AppointmentTypeSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "created_at", "updated_at")
 
 
+class AgendaStaffSerializer(serializers.ModelSerializer):
+    display_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = (
+            "id",
+            "username",
+            "first_name",
+            "last_name",
+            "email",
+            "role",
+            "professional_title",
+            "display_name",
+            "is_active",
+        )
+        read_only_fields = fields
+
+    def get_display_name(self, obj) -> str:
+        return obj.get_full_name() or obj.username
+
+
 class AppointmentStaffSerializer(serializers.ModelSerializer):
     class Meta:
         model = AppointmentStaff

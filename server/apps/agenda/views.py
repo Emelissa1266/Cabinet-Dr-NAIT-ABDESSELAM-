@@ -24,6 +24,7 @@ from .models import (
 )
 from .permissions import AgendaConfigPermission, AgendaPermission
 from .serializers import (
+    AgendaStaffSerializer,
     AppointmentRescheduleSerializer,
     AppointmentSerializer,
     AppointmentStaffSerializer,
@@ -92,6 +93,15 @@ class AppointmentTypeViewSet(viewsets.ModelViewSet):
     search_fields = ("name", "code", "description")
     ordering_fields = ("name", "created_at")
     ordering = ("name",)
+
+
+class AgendaStaffView(APIView):
+    permission_classes = [AgendaPermission]
+
+    @extend_schema(responses=AgendaStaffSerializer(many=True))
+    def get(self, request):
+        queryset = User.objects.filter(is_active=True).order_by("role", "last_name", "first_name", "username")
+        return Response(AgendaStaffSerializer(queryset, many=True).data)
 
 
 class AppointmentViewSet(viewsets.ModelViewSet):

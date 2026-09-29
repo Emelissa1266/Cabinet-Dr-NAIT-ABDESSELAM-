@@ -3,7 +3,6 @@
 import type { ReactNode } from "react";
 import { useAuth } from "./auth-provider";
 
-/** Demo UI guard only. Django will enforce authorization at the API boundary. */
 export function DoctorOnly({ children }: { children: ReactNode }) {
   const { user, ready } = useAuth();
   if (!ready || !user) return null;

@@ -5,11 +5,11 @@ export function CalendarEvent({ item, onSelect }: { item: PositionedAppointment;
   const height = (end - start) * 1.6 - 3;
   return <button className={styles.event} data-category={appointment.category} data-calendar-event={appointment.id}
     style={{ top: (start - 480) * 1.6, height, paddingBlock: height < 24 ? 0 : undefined, left: `calc(${column / columns * 100}% + 4px)`, width: `calc(${100 / columns}% - 8px)` }}
-    aria-label={`${appointment.patient}, ${appointment.type}, ${appointment.start} – ${appointment.end}, ${appointment.status}`}
+    aria-label={`${appointment.patient}, ${appointment.type}, ${appointment.start} – ${appointment.end}, ${appointment.statusLabel}`}
     title={`${appointment.patient} · ${appointment.type} · ${appointment.start} – ${appointment.end}`} onClick={onSelect}>
     <strong>{appointment.patient}</strong>
     {height >= 65 && <span>{appointment.type}</span>}
     {height >= 40 && <time>{appointment.start} – {appointment.end}</time>}
-    {height >= 85 && <span className={styles.status}><i aria-hidden="true" />{appointment.status}</span>}
+    {height >= 85 && <span className={styles.status}><i aria-hidden="true" />{appointment.statusLabel}</span>}
   </button>;
 }

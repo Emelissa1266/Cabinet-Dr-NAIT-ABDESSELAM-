@@ -1,6 +1,6 @@
 .env
 .env.*
-.env.example
+!.env.example
 
 .venv/
 venv/
@@ -16,4 +16,3 @@ staticfiles/
 .ruff_cache/
 .coverage
 htmlcov/
-
