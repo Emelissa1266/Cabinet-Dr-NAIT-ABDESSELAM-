@@ -99,7 +99,7 @@ class CareSessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = CareSession
         fields = "__all__"
-        read_only_fields = ("id", "started_at", "completed_at", "created_at", "updated_at")
+        read_only_fields = ("id", "nurse", "started_at", "completed_at", "created_at", "updated_at")
 
     def validate(self, attrs):
         nurse = self.context["request"].user

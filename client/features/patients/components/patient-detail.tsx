@@ -7,6 +7,8 @@ import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DetailDialog } from "@/components/ui/detail-dialog";
 import { useAuth } from "@/features/auth/components/auth-provider";
+import { PatientCareSection } from "@/features/care/components/patient-care-section";
+import { PatientPhase9ESections } from "@/features/medical/components/patient-phase-9e-sections";
 import type { Patient } from "../types";
 import { deletePatient, getPatient, updatePatient } from "../services/patient-service";
 import { fieldErrors, patientErrorMessage, type FieldErrors } from "../services/patient-errors";
@@ -38,6 +40,7 @@ export function PatientDetail({ id, basePath = "/patients" }: { id: string; base
   const [fieldErrorState, setFieldErrorState] = useState<FieldErrors>({});
   const [feedback, setFeedback] = useState("");
   const canDelete = user?.role === "ADMIN" || user?.role === "DOCTOR";
+  const canReadCare = user?.role === "ADMIN" || user?.role === "DOCTOR" || user?.role === "NURSE";
   const show = (name: string) => tab === "Vue générale" || tab === name;
 
   const load = useCallback(async () => {
@@ -113,8 +116,12 @@ export function PatientDetail({ id, basePath = "/patients" }: { id: string; base
           {show("Rendez-vous") && <section className={`${ui.panel} ${styles.next}`}><p className={ui.eyebrow}>Rendez-vous</p><h2>À raccorder en Phase 9D</h2><p>Les rendez-vous ne sont pas chargés depuis le module Patients pendant cette phase.</p></section>}
           {show("Interventions") && <section className={ui.panel}><h2>Interventions</h2><p>Les chirurgies et interventions seront raccordées pendant la phase Surgery.</p></section>}
           {show("Médical") && <section className={ui.panel}><h2>Notes & dossier</h2><div className={styles.inset}><h3>Notes administratives</h3><p>{patient.notes || "Aucune note administrative."}</p></div>{medical?.clinical_notes.length ? <div className={styles.inset}><h3>Notes cliniques</h3>{medical.clinical_notes.map((note) => <p key={note.id}>{dateTime(note.created_at)} — {note.note}</p>)}</div> : <div className={styles.inset}><h3>Notes cliniques</h3><p>{medical ? "Aucune note clinique active." : "Non disponible pour votre rôle."}</p></div>}</section>}
+          {show("Médical") && <PatientPhase9ESections patient={patient} mode="medical" />}
           {tab === "Vue générale" && <section className={ui.panel}><h2>Activité récente</h2><p>Dossier créé le {dateTime(patient.createdAt)}.</p><p>Dernière mise à jour le {dateTime(patient.updatedAt)}.</p></section>}
-          {["Ordonnances", "Soins", "Documents", "Paiements"].includes(tab) && <section className={ui.panel}><h2>{tab}</h2><p>Ce module sera raccordé lors de sa phase d’intégration dédiée.</p>{tab !== "Documents" && <Link className={ui.action} href={tab === "Ordonnances" ? "/prescriptions" : tab === "Soins" ? "/care" : "/billing"}>Ouvrir le module</Link>}</section>}
+          {tab === "Ordonnances" && <PatientPhase9ESections patient={patient} mode="prescriptions" />}
+          {show("Soins") && canReadCare && <PatientCareSection patient={patient} />}
+          {tab === "Soins" && !canReadCare && <section className={ui.panel}><h2>Soins</h2><p>Les soins cliniques ne sont pas disponibles pour votre rôle.</p></section>}
+          {["Documents", "Paiements"].includes(tab) && <section className={ui.panel}><h2>{tab}</h2><p>Ce module sera raccordé lors de sa phase d’intégration dédiée.</p><Link className={ui.action} href="/billing">Ouvrir le module</Link></section>}
         </div>
       </div>
       <DetailDialog title="Modifier patient" open={editing} onClose={() => setEditing(false)}>

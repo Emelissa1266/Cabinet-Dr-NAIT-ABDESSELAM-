@@ -171,6 +171,26 @@ def test_secretary_and_nurse_cannot_prescribe_care(api_client, secretary_user, n
 
 
 @pytest.mark.django_db
+def test_nurse_creates_care_session_with_authenticated_nurse(api_client, nurse_user, care_plan):
+    api_client.force_authenticate(user=nurse_user)
+
+    response = api_client.post(
+        "/api/v1/care-sessions/",
+        {
+            "care": care_plan.id,
+            "scheduled_at": timezone.now().isoformat(),
+            "notes": "First planned execution",
+        },
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.data["nurse"] == nurse_user.id
+    assert response.data["status"] == CareSession.Status.PLANNED
+    assert CareSession.objects.filter(care=care_plan, nurse=nurse_user).count() == 1
+
+
+@pytest.mark.django_db
 def test_care_session_start_complete_required_parameters_and_progress(
     api_client,
     nurse_user,
