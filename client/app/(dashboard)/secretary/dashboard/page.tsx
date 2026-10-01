@@ -1,1 +1,5 @@
-import {SecretaryDashboard} from "@/features/secretary/components/secretary-dashboard";export default function Page(){return <SecretaryDashboard/>;}
+import { RealDashboard } from "@/features/dashboard/components/real-dashboard";
+
+export default function Page() {
+  return <RealDashboard />;
+}

@@ -1,5 +1,8 @@
 import { DoctorOnly } from "@/features/auth/components/doctor-only";
-import { InterventionProgram } from "@/features/interventions/components/intervention-program";
-import { interventionService } from "@/features/interventions/services/intervention-service";
+import { RealSurgeryWorkspace } from "@/features/interventions/components/real-surgery-workspace";
+
 export const metadata = { title: "Interventions | Cabinet Dr. Gaya" };
-export default async function InterventionsPage(){return <DoctorOnly><InterventionProgram data={await interventionService.getProgram()}/></DoctorOnly>;}
+
+export default function InterventionsPage() {
+  return <DoctorOnly><RealSurgeryWorkspace /></DoctorOnly>;
+}

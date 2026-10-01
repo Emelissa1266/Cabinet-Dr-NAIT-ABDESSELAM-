@@ -1,1 +1,6 @@
-import {SecretaryBilling} from "@/features/secretary/components/secretary-billing";export default async function Page({searchParams}:{searchParams:Promise<{new?:string;patient?:string;invoice?:string;appointment?:string}>}){const p=await searchParams;return <SecretaryBilling key={JSON.stringify(p)} create={p.new==="1"} patientId={p.patient} invoiceId={p.invoice} appointmentId={p.appointment}/>;}
+import {RealBillingWorkspace} from "@/features/billing/components/real-billing-workspace";
+
+export default async function Page({searchParams}:{searchParams:Promise<{new?:string;patient?:string;invoice?:string;appointment?:string}>}) {
+  const p=await searchParams;
+  return <RealBillingWorkspace key={JSON.stringify(p)} create={p.new==="1"} initialPatientId={p.patient} initialInvoiceId={p.invoice}/>;
+}

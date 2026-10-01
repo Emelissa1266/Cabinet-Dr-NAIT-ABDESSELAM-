@@ -1,3 +1,3 @@
-import { NurseDashboard } from "@/features/nurse/components/nurse-dashboard";
+import { RealDashboard } from "@/features/dashboard/components/real-dashboard";
 export const metadata = { title: "Espace infirmier — Tableau de bord" };
-export default function Page() { return <NurseDashboard />; }
+export default function Page() { return <RealDashboard />; }

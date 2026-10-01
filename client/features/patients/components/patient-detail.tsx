@@ -7,7 +7,11 @@ import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DetailDialog } from "@/components/ui/detail-dialog";
 import { useAuth } from "@/features/auth/components/auth-provider";
+import { PatientFinancialSection } from "@/features/billing/components/patient-financial-section";
 import { PatientCareSection } from "@/features/care/components/patient-care-section";
+import { PatientDocumentsSection } from "@/features/documents/components/patient-documents-section";
+import { PatientPhotosSection } from "@/features/documents/components/patient-photos-section";
+import { PatientSurgerySection } from "@/features/interventions/components/patient-surgery-section";
 import { PatientPhase9ESections } from "@/features/medical/components/patient-phase-9e-sections";
 import type { Patient } from "../types";
 import { deletePatient, getPatient, updatePatient } from "../services/patient-service";
@@ -41,6 +45,10 @@ export function PatientDetail({ id, basePath = "/patients" }: { id: string; base
   const [feedback, setFeedback] = useState("");
   const canDelete = user?.role === "ADMIN" || user?.role === "DOCTOR";
   const canReadCare = user?.role === "ADMIN" || user?.role === "DOCTOR" || user?.role === "NURSE";
+  const canReadSurgery = user?.role === "ADMIN" || user?.role === "DOCTOR" || user?.role === "NURSE" || user?.role === "SECRETARY";
+  const canReadBilling = user?.role === "ADMIN" || user?.role === "SECRETARY" || user?.role === "DOCTOR" || user?.role === "NURSE";
+  const canReadDocuments = user?.role === "ADMIN" || user?.role === "DOCTOR" || user?.role === "NURSE" || user?.role === "SECRETARY";
+  const canReadPhotos = user?.role === "ADMIN" || user?.role === "DOCTOR" || user?.role === "NURSE";
   const show = (name: string) => tab === "Vue générale" || tab === name;
 
   const load = useCallback(async () => {
@@ -110,18 +118,23 @@ export function PatientDetail({ id, basePath = "/patients" }: { id: string; base
         <div className={styles.stack}>
           {show("Médical") && <section className={ui.panel}><h2>Informations essentielles</h2><dl className={styles.info}><dt>Téléphone</dt><dd>{patient.phone || "Non renseigné"}</dd><dt>Email personnel</dt><dd>{patient.email || "Non renseigné"}</dd><dt>Date de naissance</dt><dd>{formatDate(patient.dateOfBirth)}</dd><dt>Ville</dt><dd>{patient.city || "Non renseignée"}</dd><dt>Profession</dt><dd>{patient.profession || "Non renseignée"}</dd><dt>Contact d’urgence</dt><dd>{patient.emergencyContact || "Non renseigné"} {patient.emergencyPhone}</dd></dl></section>}
           {show("Médical") && <section className={ui.panel}><h2>Alertes médicales</h2>{medical ? <><div className={styles.warning}><h3>Allergies</h3>{medical.allergies.length ? medical.allergies.map((item) => <p key={item.id}>{item.title}{item.severity ? ` · ${item.severity}` : ""} — {item.description || "Sans description"}</p>) : <p>Aucune allergie active renseignée.</p>}</div><div className={styles.inset}><h3>Antécédents</h3>{medical.medical_history.length ? medical.medical_history.map((item) => <p key={item.id}>{item.title} — {item.description || "Sans description"}</p>) : <p>Aucun antécédent actif renseigné.</p>}</div></> : <p>Informations médicales non disponibles pour votre rôle.</p>}</section>}
-          {show("Photos") && <section className={ui.panel}><h2>Photothèque clinique</h2><p>Les photos cliniques privées seront raccordées dans la phase Documents / Photothèque.</p></section>}
+          {show("Photos") && canReadPhotos && <PatientPhotosSection patient={patient} />}
+          {tab === "Photos" && !canReadPhotos && <section className={ui.panel}><h2>Photothèque clinique</h2><p>Les photos cliniques ne sont pas disponibles pour votre rôle.</p></section>}
         </div>
         <div className={styles.stack}>
           {show("Rendez-vous") && <section className={`${ui.panel} ${styles.next}`}><p className={ui.eyebrow}>Rendez-vous</p><h2>À raccorder en Phase 9D</h2><p>Les rendez-vous ne sont pas chargés depuis le module Patients pendant cette phase.</p></section>}
-          {show("Interventions") && <section className={ui.panel}><h2>Interventions</h2><p>Les chirurgies et interventions seront raccordées pendant la phase Surgery.</p></section>}
+          {show("Interventions") && canReadSurgery && <PatientSurgerySection patient={patient} />}
+          {tab === "Interventions" && !canReadSurgery && <section className={ui.panel}><h2>Interventions</h2><p>Les interventions ne sont pas disponibles pour votre rôle.</p></section>}
           {show("Médical") && <section className={ui.panel}><h2>Notes & dossier</h2><div className={styles.inset}><h3>Notes administratives</h3><p>{patient.notes || "Aucune note administrative."}</p></div>{medical?.clinical_notes.length ? <div className={styles.inset}><h3>Notes cliniques</h3>{medical.clinical_notes.map((note) => <p key={note.id}>{dateTime(note.created_at)} — {note.note}</p>)}</div> : <div className={styles.inset}><h3>Notes cliniques</h3><p>{medical ? "Aucune note clinique active." : "Non disponible pour votre rôle."}</p></div>}</section>}
           {show("Médical") && <PatientPhase9ESections patient={patient} mode="medical" />}
           {tab === "Vue générale" && <section className={ui.panel}><h2>Activité récente</h2><p>Dossier créé le {dateTime(patient.createdAt)}.</p><p>Dernière mise à jour le {dateTime(patient.updatedAt)}.</p></section>}
           {tab === "Ordonnances" && <PatientPhase9ESections patient={patient} mode="prescriptions" />}
           {show("Soins") && canReadCare && <PatientCareSection patient={patient} />}
           {tab === "Soins" && !canReadCare && <section className={ui.panel}><h2>Soins</h2><p>Les soins cliniques ne sont pas disponibles pour votre rôle.</p></section>}
-          {["Documents", "Paiements"].includes(tab) && <section className={ui.panel}><h2>{tab}</h2><p>Ce module sera raccordé lors de sa phase d’intégration dédiée.</p><Link className={ui.action} href="/billing">Ouvrir le module</Link></section>}
+          {show("Paiements") && canReadBilling && <PatientFinancialSection patient={patient} />}
+          {tab === "Paiements" && !canReadBilling && <section className={ui.panel}><h2>Paiements</h2><p>La synthèse financière n’est pas disponible pour votre rôle.</p></section>}
+          {show("Documents") && canReadDocuments && <PatientDocumentsSection patient={patient} />}
+          {tab === "Documents" && !canReadDocuments && <section className={ui.panel}><h2>Documents</h2><p>Les documents ne sont pas disponibles pour votre rôle.</p></section>}
         </div>
       </div>
       <DetailDialog title="Modifier patient" open={editing} onClose={() => setEditing(false)}>

@@ -9,6 +9,12 @@ export interface ApiRequestOptions extends Omit<RequestInit, "body" | "headers">
   retryOnUnauthorized?: boolean;
 }
 
+export interface ApiBlobResponse {
+  blob: Blob;
+  headers: Headers;
+  status: number;
+}
+
 export class ApiError extends Error {
   status: number;
   data: unknown;
@@ -51,6 +57,38 @@ async function readResponse(response: Response) {
   const contentType = response.headers.get("content-type") ?? "";
   if (contentType.includes("application/json")) return response.json() as Promise<unknown>;
   return response.text();
+}
+
+async function authorizedFetch(
+  path: string,
+  init: RequestInit,
+  auth: boolean,
+  retryOnUnauthorized: boolean,
+) {
+  const requestHeaders = new Headers(init.headers);
+  const tokens = tokenStorage.read();
+  if (auth && tokens?.access) requestHeaders.set("Authorization", `Bearer ${tokens.access}`);
+
+  let response: Response;
+  try {
+    response = await fetch(endpoint(path), { ...init, headers: requestHeaders });
+  } catch (error) {
+    throw new ApiError(
+      error instanceof Error ? error.message : "Connexion au serveur impossible.",
+      0,
+      null,
+    );
+  }
+
+  if (response.status === 401 && auth && retryOnUnauthorized) {
+    const access = await refreshAccessToken();
+    if (access) {
+      requestHeaders.set("Authorization", `Bearer ${access}`);
+      response = await fetch(endpoint(path), { ...init, headers: requestHeaders });
+    }
+  }
+
+  return response;
 }
 
 async function refreshAccessToken() {
@@ -99,31 +137,46 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
     }
   }
 
-  const tokens = tokenStorage.read();
-  if (auth && tokens?.access) requestHeaders.set("Authorization", `Bearer ${tokens.access}`);
-
-  let response: Response;
-  try {
-    response = await fetch(endpoint(path), { ...init, headers: requestHeaders, body: requestBody });
-  } catch (error) {
-    throw new ApiError(
-      error instanceof Error ? error.message : "Connexion au serveur impossible.",
-      0,
-      null,
-    );
-  }
-
-  if (response.status === 401 && auth && retryOnUnauthorized) {
-    const access = await refreshAccessToken();
-    if (access) {
-      requestHeaders.set("Authorization", `Bearer ${access}`);
-      response = await fetch(endpoint(path), { ...init, headers: requestHeaders, body: requestBody });
-    }
-  }
+  const response = await authorizedFetch(
+    path,
+    { ...init, headers: requestHeaders, body: requestBody },
+    auth,
+    retryOnUnauthorized,
+  );
 
   const data = await readResponse(response);
   if (!response.ok) throw new ApiError(jsonMessage(data, "La requête a échoué."), response.status, data);
   return data as T;
+}
+
+export async function apiBlobRequest(path: string, options: ApiRequestOptions = {}): Promise<ApiBlobResponse> {
+  const { auth = true, retryOnUnauthorized = true, body, headers, ...init } = options;
+  const requestHeaders = new Headers(headers);
+  requestHeaders.set("Accept", requestHeaders.get("Accept") ?? "*/*");
+
+  let requestBody: BodyInit | undefined;
+  if (body !== undefined && body !== null) {
+    if (isBodyInit(body)) {
+      requestBody = body;
+    } else {
+      requestBody = JSON.stringify(body);
+      requestHeaders.set("Content-Type", "application/json");
+    }
+  }
+
+  const response = await authorizedFetch(
+    path,
+    { ...init, headers: requestHeaders, body: requestBody },
+    auth,
+    retryOnUnauthorized,
+  );
+
+  if (!response.ok) {
+    const data = await readResponse(response);
+    throw new ApiError(jsonMessage(data, "La requête a échoué."), response.status, data);
+  }
+
+  return { blob: await response.blob(), headers: response.headers, status: response.status };
 }
 
 export { apiBaseUrl };
