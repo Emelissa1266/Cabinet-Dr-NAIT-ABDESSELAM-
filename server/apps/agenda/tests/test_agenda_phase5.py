@@ -67,6 +67,35 @@ def working_hours(doctor_user, nurse_user, base_day):
         )
 
 
+@pytest.mark.django_db
+def test_staff_working_hours_config_api_is_admin_write_only(api_client, admin_user, doctor_user):
+    payload = {
+        "staff": doctor_user.id,
+        "weekday": 0,
+        "start_time": "09:00:00",
+        "end_time": "17:00:00",
+        "is_active": True,
+    }
+    api_client.force_authenticate(user=doctor_user)
+    rejected = api_client.post("/api/v1/staff-working-hours/", payload, format="json")
+    assert rejected.status_code == status.HTTP_403_FORBIDDEN
+    assert not StaffWorkingHours.objects.filter(staff=doctor_user, weekday=0).exists()
+
+    api_client.force_authenticate(user=admin_user)
+    created = api_client.post("/api/v1/staff-working-hours/", payload, format="json")
+    assert created.status_code == status.HTTP_201_CREATED
+
+    updated = api_client.patch(
+        f"/api/v1/staff-working-hours/{created.data['id']}/",
+        {"end_time": "18:00:00"},
+        format="json",
+    )
+    assert updated.status_code == status.HTTP_200_OK
+    hours = StaffWorkingHours.objects.get(pk=created.data["id"])
+    assert hours.end_time == time(18, 0)
+    assert AuditLog.objects.filter(action="WORKING_HOURS_CHANGED", entity_id=str(hours.id)).exists()
+
+
 @pytest.fixture
 def appointment(api_client, secretary_user, doctor_user, patient, consultation_type, working_hours, base_day):
     api_client.force_authenticate(user=secretary_user)

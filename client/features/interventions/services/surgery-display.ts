@@ -30,7 +30,7 @@ export const anesthesiaLabels: Record<SurgeryAnesthesiaType, string> = {
 
 export function surgeryErrorMessage(cause: unknown) {
   if (cause instanceof ApiError) {
-    if (cause.status === 0) return "Connexion au backend impossible.";
+    if (cause.status === 0) return "Connexion au serveur impossible.";
     return `${cause.status} — ${cause.message}`;
   }
   return "La requête Surgery a échoué.";

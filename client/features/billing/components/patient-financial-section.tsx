@@ -51,7 +51,7 @@ export function PatientFinancialSection({ patient }: { patient: Patient }) {
       <div className={ui.heading}>
         <div>
           <h2>Paiements</h2>
-          <p>Synthèse financière backend, factures et règlements réels.</p>
+          <p>Synthèse financière, factures et règlements.</p>
         </div>
         <Link className={ui.action} href={`/secretary/billing?patient=${patient.apiId}`}>Ouvrir facturation</Link>
       </div>

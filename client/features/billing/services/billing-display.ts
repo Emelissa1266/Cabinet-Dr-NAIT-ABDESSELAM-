@@ -25,7 +25,7 @@ export const paymentMethodLabels: Record<PaymentMethod, string> = {
 
 export function billingErrorMessage(cause: unknown) {
   if (cause instanceof ApiError) {
-    if (cause.status === 0) return "Connexion au backend impossible.";
+    if (cause.status === 0) return "Connexion au serveur impossible.";
     return `${cause.status} — ${cause.message}`;
   }
   return "La requête financière a échoué.";

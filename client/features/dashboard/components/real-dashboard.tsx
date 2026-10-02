@@ -9,19 +9,22 @@ import workspace from "@/components/ui/module-workspace.module.css";
 import type { DashboardActivity, DashboardApi, DashboardAppointmentPreview, DashboardCareSessionPreview, DashboardSurgeryPreview } from "../api-types";
 import { getDashboard } from "../services/dashboard-api-service";
 import { dashboardErrorMessage, dateTime, money } from "../services/dashboard-display";
+import { appointmentDisplay, careSessionDisplay, dashboardFailureState, dashboardRoleCopy, surgeryDisplay } from "../services/dashboard-view";
 
 function AppointmentList({ items }: { items: DashboardAppointmentPreview[] }) {
   return (
     <ul className={workspace.list}>
       {items.map((item) => (
         <li key={item.id}>
-          <strong>Rendez-vous planifié</strong>
+          <strong>{appointmentDisplay(item).title}</strong>
+          <span>{appointmentDisplay(item).subtitle}</span>
           <small>{dateTime(item.start_at)}</small>
+          <small>{appointmentDisplay(item).meta}</small>
           <StatusBadge tone="neutral">{item.status}</StatusBadge>
           <Link className={workspace.link} href="/agenda">Agenda</Link>
         </li>
       ))}
-      {!items.length && <li>Aucun rendez-vous dans l’aperçu backend.</li>}
+      {!items.length && <li>Aucun rendez-vous dans l’aperçu.</li>}
     </ul>
   );
 }
@@ -31,13 +34,14 @@ function SurgeryList({ items }: { items: DashboardSurgeryPreview[] }) {
     <ul className={workspace.list}>
       {items.map((item) => (
         <li key={item.id}>
-          <strong>{item.procedure_name}</strong>
+          <strong>{surgeryDisplay(item).title}</strong>
+          <span>{surgeryDisplay(item).subtitle}</span>
           <small>{dateTime(item.planned_date)}</small>
           <StatusBadge tone="teal">{item.status}</StatusBadge>
           <Link className={workspace.link} href="/interventions">Interventions</Link>
         </li>
       ))}
-      {!items.length && <li>Aucune intervention prochaine dans l’aperçu backend.</li>}
+      {!items.length && <li>Aucune intervention prochaine dans l’aperçu.</li>}
     </ul>
   );
 }
@@ -47,13 +51,15 @@ function CareSessionList({ items }: { items: DashboardCareSessionPreview[] }) {
     <ul className={workspace.list}>
       {items.map((item) => (
         <li key={item.id}>
-          <strong>Séance de soin</strong>
+          <strong>{careSessionDisplay(item).title}</strong>
+          <span>{careSessionDisplay(item).subtitle}</span>
           <small>{dateTime(item.scheduled_at)}</small>
+          <small>{careSessionDisplay(item).meta}</small>
           <StatusBadge tone="neutral">{item.status}</StatusBadge>
           <Link className={workspace.link} href={`/nurse/care?session=${item.id}`}>Ouvrir le soin</Link>
         </li>
       ))}
-      {!items.length && <li>Aucune séance à venir dans l’aperçu backend.</li>}
+      {!items.length && <li>Aucune séance à venir dans l’aperçu.</li>}
     </ul>
   );
 }
@@ -83,7 +89,7 @@ function ActivityList({ items }: { items: DashboardActivity[] }) {
           <small>{item.entity_type} · {item.actor || "Système"} · {dateTime(item.created_at)}</small>
         </li>
       ))}
-      {!items.length && <li>Aucune activité récente dans l’aperçu backend.</li>}
+      {!items.length && <li>Aucune activité récente dans l’aperçu.</li>}
     </ul>
   );
 }
@@ -94,13 +100,17 @@ function DashboardContent({ data }: { data: DashboardApi }) {
       <>
         <ModuleSummary items={[
           { label: "Rendez-vous aujourd’hui", value: String(data.today.appointments_count) },
+          { label: "Rendez-vous à venir", value: String(data.upcoming.appointments_count) },
+          { label: "Rendez-vous en cours", value: String(data.pending.appointments_in_progress_count) },
           { label: "Interventions à venir", value: String(data.upcoming.surgeries_count) },
-          { label: "Suivis postopératoires", value: String(data.upcoming.postoperative_followups_count) },
+          { label: "Suivis postopératoires à venir", value: String(data.upcoming.postoperative_followups_count) },
           { label: "Préop à revoir", value: String(data.pending.preop_attention_count) },
+          { label: "Soins prescrits actifs", value: String(data.pending.active_care_count) },
           { label: "Notifications non lues", value: String(data.statistics.unread_notifications_count) },
         ]} />
         <div className={workspace.twoColumns}>
           <section className={ui.panel}><h2>Agenda du jour</h2><AppointmentList items={data.today.appointments} /></section>
+          <section className={ui.panel}><h2>Prochains rendez-vous</h2><AppointmentList items={data.upcoming.appointments} /></section>
           <section className={ui.panel}><h2>Interventions à venir</h2><SurgeryList items={data.upcoming.surgeries} /></section>
         </div>
       </>
@@ -110,14 +120,20 @@ function DashboardContent({ data }: { data: DashboardApi }) {
     return (
       <>
         <ModuleSummary items={[
-          { label: "Séances assignées", value: String(data.today.assigned_sessions_count) },
-          { label: "Séances terminées", value: String(data.today.completed_sessions_count) },
-          { label: "À venir", value: String(data.upcoming.care_sessions_count) },
-          { label: "En cours", value: String(data.pending.in_progress_sessions_count) },
+          { label: "Rendez-vous aujourd’hui", value: String(data.today.appointments_count) },
+          { label: "Rendez-vous à venir", value: String(data.upcoming.appointments_count) },
+          { label: "Rendez-vous en cours", value: String(data.pending.appointments_in_progress_count) },
+          { label: "Séances planifiées aujourd’hui", value: String(data.today.planned_sessions_count) },
+          { label: "Séances terminées aujourd’hui", value: String(data.today.completed_sessions_count) },
+          { label: "Séances à venir", value: String(data.upcoming.care_sessions_count) },
+          { label: "Séances en cours", value: String(data.pending.in_progress_sessions_count) },
           { label: "Soins actifs", value: String(data.pending.assigned_care_count) },
           { label: "Notifications non lues", value: String(data.statistics.unread_notifications_count) },
         ]} />
-        <section className={ui.panel}><h2>Prochaines séances</h2><CareSessionList items={data.upcoming.care_sessions} /></section>
+        <div className={workspace.twoColumns}>
+          <section className={ui.panel}><h2>Prochains rendez-vous</h2><AppointmentList items={data.upcoming.appointments} /></section>
+          <section className={ui.panel}><h2>Prochaines séances</h2><CareSessionList items={data.upcoming.care_sessions} /></section>
+        </div>
       </>
     );
   }
@@ -128,11 +144,12 @@ function DashboardContent({ data }: { data: DashboardApi }) {
           { label: "Rendez-vous aujourd’hui", value: String(data.today.appointments_count) },
           { label: "Patients attendus", value: String(data.today.patients_scheduled_count) },
           { label: "Présents accueil", value: String(data.today.checked_in_count) },
-          { label: "À venir", value: String(data.upcoming.appointments_count) },
+          { label: "Rendez-vous à venir", value: String(data.upcoming.appointments_count) },
           { label: "Notifications non lues", value: String(data.statistics.unread_notifications_count) },
         ]} />
         <div className={workspace.twoColumns}>
-          <section className={ui.panel}><h2>Rendez-vous</h2><AppointmentList items={data.today.appointments} /></section>
+          <section className={ui.panel}><h2>Rendez-vous du jour</h2><AppointmentList items={data.today.appointments} /></section>
+          <section className={ui.panel}><h2>Prochains rendez-vous</h2><AppointmentList items={data.upcoming.appointments} /></section>
           <FinancialPanel financial={data.financial} />
         </div>
       </>
@@ -169,8 +186,9 @@ export function RealDashboard() {
     try {
       setData(await getDashboard());
     } catch (cause) {
-      setData(null);
-      setError(dashboardErrorMessage(cause));
+      const failed = dashboardFailureState(dashboardErrorMessage(cause));
+      setData(failed.data);
+      setError(failed.error);
     } finally {
       setLoading(false);
     }
@@ -185,16 +203,17 @@ export function RealDashboard() {
 
   if (loading) return <main className={ui.page}><p className={ui.panel} role="status">Chargement du tableau de bord…</p></main>;
   if (error || !data) return <main className={ui.page}><section className={ui.panel}><h1>Tableau de bord</h1><p role="alert">{error || "Tableau de bord indisponible."}</p><button className={ui.action} onClick={() => void load()}>Réessayer</button></section></main>;
+  const copy = dashboardRoleCopy[data.role];
 
   return (
     <main className={ui.page}>
       <header className={ui.heading}>
         <div>
-          <p className={ui.eyebrow}>Tableau de bord réel</p>
-          <h1 className={ui.title}>Vue opérationnelle {data.role.toLowerCase()}</h1>
-          <p className={ui.description}>Agrégats servis par le backend selon votre rôle authentifié.</p>
+          <p className={ui.eyebrow}>{copy.eyebrow}</p>
+          <h1 className={ui.title}>{copy.title}</h1>
+          <p className={ui.description}>{copy.description}</p>
         </div>
-        <button className={ui.action} onClick={() => void load()}>Actualiser</button>
+        <button className={ui.action} disabled={loading} onClick={() => void load()}>{loading ? "Actualisation…" : "Actualiser"}</button>
       </header>
       <DashboardContent data={data} />
     </main>

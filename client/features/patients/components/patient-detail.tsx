@@ -13,6 +13,7 @@ import { PatientDocumentsSection } from "@/features/documents/components/patient
 import { PatientPhotosSection } from "@/features/documents/components/patient-photos-section";
 import { PatientSurgerySection } from "@/features/interventions/components/patient-surgery-section";
 import { PatientPhase9ESections } from "@/features/medical/components/patient-phase-9e-sections";
+import { PatientAppointmentsSection } from "./patient-appointments-section";
 import type { Patient } from "../types";
 import { deletePatient, getPatient, updatePatient } from "../services/patient-service";
 import { fieldErrors, patientErrorMessage, type FieldErrors } from "../services/patient-errors";
@@ -122,7 +123,7 @@ export function PatientDetail({ id, basePath = "/patients" }: { id: string; base
           {tab === "Photos" && !canReadPhotos && <section className={ui.panel}><h2>Photothèque clinique</h2><p>Les photos cliniques ne sont pas disponibles pour votre rôle.</p></section>}
         </div>
         <div className={styles.stack}>
-          {show("Rendez-vous") && <section className={`${ui.panel} ${styles.next}`}><p className={ui.eyebrow}>Rendez-vous</p><h2>À raccorder en Phase 9D</h2><p>Les rendez-vous ne sont pas chargés depuis le module Patients pendant cette phase.</p></section>}
+          {show("Rendez-vous") && <PatientAppointmentsSection patient={patient} basePath={basePath} />}
           {show("Interventions") && canReadSurgery && <PatientSurgerySection patient={patient} />}
           {tab === "Interventions" && !canReadSurgery && <section className={ui.panel}><h2>Interventions</h2><p>Les interventions ne sont pas disponibles pour votre rôle.</p></section>}
           {show("Médical") && <section className={ui.panel}><h2>Notes & dossier</h2><div className={styles.inset}><h3>Notes administratives</h3><p>{patient.notes || "Aucune note administrative."}</p></div>{medical?.clinical_notes.length ? <div className={styles.inset}><h3>Notes cliniques</h3>{medical.clinical_notes.map((note) => <p key={note.id}>{dateTime(note.created_at)} — {note.note}</p>)}</div> : <div className={styles.inset}><h3>Notes cliniques</h3><p>{medical ? "Aucune note clinique active." : "Non disponible pour votre rôle."}</p></div>}</section>}
@@ -141,7 +142,7 @@ export function PatientDetail({ id, basePath = "/patients" }: { id: string; base
         <PatientForm patient={patient} busy={busy} errors={fieldErrorState} onCancel={() => setEditing(false)} onSubmit={save} />
       </DetailDialog>
       <DetailDialog title="Supprimer le patient" open={deleting} onClose={() => setDeleting(false)}>
-        <p>Confirmez la suppression du dossier de {patient.name}. Le backend reste l’autorité et peut refuser cette action.</p>
+        <p>Confirmez la suppression du dossier de {patient.name}. Cette action peut être refusée si des contraintes médicales existent.</p>
         <div className={ui.actions}><button className={`${ui.action} ${ui.primary}`} disabled={busy} onClick={confirmDelete}>{busy ? "Suppression…" : "Confirmer"}</button><button className={ui.action} disabled={busy} onClick={() => setDeleting(false)}>Annuler</button></div>
       </DetailDialog>
     </div>

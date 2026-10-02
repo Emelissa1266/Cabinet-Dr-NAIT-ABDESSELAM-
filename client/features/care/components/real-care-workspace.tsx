@@ -154,7 +154,7 @@ function CarePlanForm({
         </select>
       </label>
       <label>Notes médicales<textarea name="notes" defaultValue={care?.notes ?? ""} maxLength={2000} /></label>
-      <p className={ui.muted}>Le total et la progression sont recalculés par le backend après enregistrement.</p>
+      <p className={ui.muted}>Le total et la progression sont recalculés après enregistrement.</p>
       {error && <p role="alert">{error}</p>}
       <div className={ui.actions}>
         <button className={`${ui.action} ${ui.primary}`} type="submit" disabled={busy}>{busy ? "Enregistrement..." : "Enregistrer"}</button>
@@ -317,7 +317,7 @@ export function RealCareWorkspace() {
                   <dt>Début</dt><dd>{dateOnly(selected.start_date)}</dd>
                   <dt>Fin</dt><dd>{dateOnly(selected.end_date)}</dd>
                   <dt>Séances</dt><dd>{selected.completed_sessions}/{selected.planned_sessions} réalisées · {selected.remaining_sessions} restantes</dd>
-                  <dt>Progression</dt><dd>{selected.progress_percentage}% backend</dd>
+                  <dt>Progression</dt><dd>{selected.progress_percentage}%</dd>
                   <dt>Total</dt><dd>{decimalAmount(selected.total_price)}</dd>
                   <dt>Consultation</dt><dd>{selected.consultation ? "Consultation liée au plan" : "Non liée"}</dd>
                 </dl>

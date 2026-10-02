@@ -196,10 +196,7 @@ class ClinicalPhotoSetViewSet(viewsets.ModelViewSet):
     ordering = ("-captured_at", "-created_at")
 
     def get_queryset(self):
-        queryset = ClinicalPhotoSet.objects.select_related("patient", "surgery", "consultation", "created_by")
-        if getattr(self.request.user, "role", None) == User.Role.NURSE:
-            queryset = queryset.filter(patient__cares__assigned_nurse=self.request.user).distinct()
-        return queryset
+        return ClinicalPhotoSet.objects.select_related("patient", "surgery", "consultation", "created_by")
 
 
 class ClinicalPhotoViewSet(viewsets.ModelViewSet):
@@ -233,8 +230,6 @@ class ClinicalPhotoViewSet(viewsets.ModelViewSet):
         )
         if "is_archived" not in self.request.query_params and self.action not in {"retrieve", "archive", "download", "view"}:
             queryset = queryset.filter(is_archived=False)
-        if getattr(self.request.user, "role", None) == User.Role.NURSE:
-            queryset = queryset.filter(patient__cares__assigned_nurse=self.request.user).distinct()
         return queryset
 
     @action(detail=True, methods=["post"])
@@ -294,6 +289,4 @@ class ClinicalPhotoComparisonViewSet(viewsets.ModelViewSet):
             "after_photo",
             "created_by",
         )
-        if getattr(self.request.user, "role", None) == User.Role.NURSE:
-            queryset = queryset.filter(patient__cares__assigned_nurse=self.request.user).distinct()
         return queryset

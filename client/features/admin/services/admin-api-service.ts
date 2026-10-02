@@ -39,6 +39,10 @@ export function updateConfig<T>(path: string, id: number | string, payload: obje
   return apiRequest<T>(`${path}/${id}/`, { method: "PATCH", body: payload });
 }
 
+export function deleteConfig(path: string, id: number | string) {
+  return apiRequest<void>(`${path}/${id}/`, { method: "DELETE" });
+}
+
 export type AdminConfigResource =
   | CareCategoryApi
   | CareTypeApi

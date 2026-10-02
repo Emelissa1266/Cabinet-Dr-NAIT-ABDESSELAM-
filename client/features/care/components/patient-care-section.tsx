@@ -63,7 +63,7 @@ export function PatientCareSection({ patient }: { patient: Patient }) {
       <div className={ui.heading}>
         <div>
           <h2>Soins</h2>
-          <p>Plans de soins, progression et séances issus du backend Care.</p>
+          <p>Plans de soins, progression et séances du patient.</p>
         </div>
         <Link className={ui.action} href="/care">Ouvrir le module</Link>
       </div>

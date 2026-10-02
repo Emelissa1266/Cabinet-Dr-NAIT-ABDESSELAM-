@@ -12,7 +12,6 @@ import type {
   ClinicalPhotoComparisonApi,
   ClinicalPhotoSetApi,
   ClinicalPhotoType,
-  ClinicalPhotoViewAngle,
 } from "../api-types";
 import { PrivateClinicalImage } from "./private-clinical-image";
 import {
@@ -28,13 +27,21 @@ import {
 } from "../services/document-api-service";
 import {
   dateTime,
-  documentErrorMessage,
   formatFileSize,
   localDateTimeInput,
   photoTypeLabels,
-  toIsoFromLocalInput,
   viewAngleLabels,
 } from "../services/document-display";
+import {
+  buildPhotoSetPayload,
+  buildPhotoUploadPayload,
+  clinicalPhotoErrorMessage,
+  patientPhotoSets,
+  photoSetOptionLabel,
+  photoSetsForUploadSelector,
+  photoSetSelectState,
+  upsertPhotoSet,
+} from "../services/photo-workflow";
 
 const photoTypes: ClinicalPhotoType[] = ["BEFORE", "AFTER", "PROGRESS", "OTHER"];
 
@@ -44,13 +51,32 @@ export function PatientPhotosSection({ patient }: { patient: Patient }) {
   const [photos, setPhotos] = useState<ClinicalPhotoApi[]>([]);
   const [comparisons, setComparisons] = useState<ClinicalPhotoComparisonApi[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedSetId, setSelectedSetId] = useState("");
   const [filter, setFilter] = useState<ClinicalPhotoType | "">("");
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
+  const [seriesLoading, setSeriesLoading] = useState(true);
+  const [seriesBusy, setSeriesBusy] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [comparisonBusy, setComparisonBusy] = useState(false);
+  const [archiveBusy, setArchiveBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const [galleryError, setGalleryError] = useState("");
+  const [seriesLoadError, setSeriesLoadError] = useState("");
+  const [seriesError, setSeriesError] = useState("");
+  const [photoError, setPhotoError] = useState("");
+  const [comparisonError, setComparisonError] = useState("");
+  const [archiveError, setArchiveError] = useState("");
   const canWrite = user?.role === "DOCTOR" || user?.role === "NURSE";
   const selected = photos.find((photo) => photo.id === selectedId) ?? photos[0] ?? null;
+  const uploadSeries = useMemo(() => photoSetsForUploadSelector(sets, filter), [filter, sets]);
+  const uploadSeriesState = photoSetSelectState(uploadSeries, seriesLoading, seriesLoadError);
+  const photoCountBySet = useMemo(() => {
+    const counts = new Map<number, number>();
+    photos.forEach((photo) => {
+      if (photo.photo_set) counts.set(photo.photo_set, (counts.get(photo.photo_set) ?? 0) + 1);
+    });
+    return counts;
+  }, [photos]);
   const photoLabel = useCallback(
     (photoId: number) => {
       const photo = photos.find((item) => item.id === photoId);
@@ -65,24 +91,42 @@ export function PatientPhotosSection({ patient }: { patient: Patient }) {
     [filter, photos],
   );
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (failureMessage = "Impossible de charger la photothèque.") => {
     setLoading(true);
-    setError("");
-    try {
-      const [setPage, photoPage, comparisonPage] = await Promise.all([
-        listClinicalPhotoSets({ patient: patient.apiId }),
-        listClinicalPhotos({ patient: patient.apiId }),
-        listClinicalPhotoComparisons({ patient: patient.apiId }),
-      ]);
-      setSets(setPage.results);
-      setPhotos(photoPage.results);
-      setComparisons(comparisonPage.results);
-      setSelectedId((current) => current ?? photoPage.results[0]?.id ?? null);
-    } catch (cause) {
-      setError(documentErrorMessage(cause));
-    } finally {
-      setLoading(false);
+    setSeriesLoading(true);
+    setGalleryError("");
+    setSeriesLoadError("");
+    const [setResult, photoResult, comparisonResult] = await Promise.allSettled([
+      listClinicalPhotoSets({ patient: patient.apiId }),
+      listClinicalPhotos({ patient: patient.apiId }),
+      listClinicalPhotoComparisons({ patient: patient.apiId }),
+    ]);
+
+    if (setResult.status === "fulfilled") {
+      const nextSets = patientPhotoSets(setResult.value.results, patient.apiId);
+      setSets(nextSets);
+      setSelectedSetId((current) => (
+        current && nextSets.some((set) => String(set.id) === current) ? current : ""
+      ));
+    } else {
+      setSeriesLoadError(clinicalPhotoErrorMessage(setResult.reason, "Impossible de charger les séries."));
     }
+
+    if (photoResult.status === "fulfilled") {
+      setPhotos(photoResult.value.results);
+      setSelectedId((current) => current ?? photoResult.value.results[0]?.id ?? null);
+    } else {
+      setGalleryError(clinicalPhotoErrorMessage(photoResult.reason, failureMessage));
+    }
+
+    if (comparisonResult.status === "fulfilled") {
+      setComparisons(comparisonResult.value.results);
+    } else if (photoResult.status === "fulfilled") {
+      setGalleryError(clinicalPhotoErrorMessage(comparisonResult.reason, failureMessage));
+    }
+
+    setSeriesLoading(false);
+    setLoading(false);
   }, [patient.apiId]);
 
   useEffect(() => {
@@ -94,65 +138,80 @@ export function PatientPhotosSection({ patient }: { patient: Patient }) {
 
   async function submitSet(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const formElement = event.currentTarget;
     const form = new FormData(event.currentTarget);
-    setBusy(true);
-    setError("");
+    setSeriesBusy(true);
+    setSeriesError("");
+    setGalleryError("");
+    setMessage("");
+    let created: ClinicalPhotoSetApi | null = null;
     try {
-      await createClinicalPhotoSet({
-        patient: patient.apiId,
-        title: String(form.get("title") || "").trim(),
-        anatomical_area: String(form.get("anatomical_area") || "").trim(),
-        captured_at: toIsoFromLocalInput(form.get("captured_at")),
-        notes: String(form.get("notes") || "").trim(),
-      });
-      event.currentTarget.reset();
-      setMessage("Série photo créée.");
-      await load();
+      created = await createClinicalPhotoSet(buildPhotoSetPayload(patient.apiId, {
+        title: form.get("title"),
+        anatomical_area: form.get("anatomical_area"),
+        captured_at: form.get("captured_at"),
+        notes: form.get("notes"),
+      }));
     } catch (cause) {
-      setError(documentErrorMessage(cause));
+      setSeriesError(clinicalPhotoErrorMessage(cause, "Impossible de créer la série."));
+      return;
     } finally {
-      setBusy(false);
+      setSeriesBusy(false);
     }
+
+    formElement.reset();
+    setSets((current) => upsertPhotoSet(current, created));
+    setSelectedSetId(String(created.id));
+    setSeriesLoadError("");
+    setMessage("Série créée avec succès.");
+    await load("La série a été créée, mais la liste n’a pas pu être actualisée.");
   }
 
   async function submitPhoto(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const formElement = event.currentTarget;
     const form = new FormData(event.currentTarget);
     const image = form.get("image");
     if (!(image instanceof File) || !image.name) {
-      setError("Sélectionnez une image clinique.");
+      setPhotoError("Sélectionnez une image clinique.");
       return;
     }
-    setBusy(true);
-    setError("");
+    setPhotoBusy(true);
+    setPhotoError("");
+    setGalleryError("");
+    setMessage("");
+    let photo: ClinicalPhotoApi | null = null;
     try {
-      const photo = await uploadClinicalPhoto({
-        patient: patient.apiId,
-        image,
-        photo_type: String(form.get("photo_type") || "BEFORE") as ClinicalPhotoType,
-        anatomical_area: String(form.get("anatomical_area") || "").trim(),
-        view_angle: String(form.get("view_angle") || "OTHER") as ClinicalPhotoViewAngle,
-        photo_set: String(form.get("photo_set") || ""),
-        captured_at: toIsoFromLocalInput(form.get("captured_at")),
-        description: String(form.get("description") || "").trim(),
-        notes: String(form.get("notes") || "").trim(),
-      });
-      event.currentTarget.reset();
-      setSelectedId(photo.id);
-      setMessage("Photo clinique importée dans le stockage privé.");
-      await load();
+      photo = await uploadClinicalPhoto(buildPhotoUploadPayload(patient.apiId, {
+        photo_type: form.get("photo_type"),
+        anatomical_area: form.get("anatomical_area"),
+        view_angle: form.get("view_angle"),
+        photo_set: selectedSetId,
+        captured_at: form.get("captured_at"),
+        description: form.get("description"),
+        notes: form.get("notes"),
+      }, image));
     } catch (cause) {
-      setError(documentErrorMessage(cause));
+      setPhotoError(clinicalPhotoErrorMessage(cause, "Impossible d’importer la photo."));
+      return;
     } finally {
-      setBusy(false);
+      setPhotoBusy(false);
     }
+
+    formElement.reset();
+    setSelectedId(photo.id);
+    setMessage("Photo clinique importée dans le stockage privé.");
+    await load("La photo a été importée, mais la photothèque n’a pas pu être actualisée.");
   }
 
   async function createComparison(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const formElement = event.currentTarget;
     const form = new FormData(event.currentTarget);
-    setBusy(true);
-    setError("");
+    setComparisonBusy(true);
+    setComparisonError("");
+    setGalleryError("");
+    setMessage("");
     try {
       await createClinicalPhotoComparison({
         patient: patient.apiId,
@@ -160,37 +219,43 @@ export function PatientPhotosSection({ patient }: { patient: Patient }) {
         after_photo: String(form.get("after_photo") || ""),
         notes: String(form.get("notes") || "").trim(),
       });
-      event.currentTarget.reset();
-      setMessage("Comparaison enregistrée.");
-      await load();
     } catch (cause) {
-      setError(documentErrorMessage(cause));
+      setComparisonError(clinicalPhotoErrorMessage(cause, "Impossible de créer la comparaison."));
+      return;
     } finally {
-      setBusy(false);
+      setComparisonBusy(false);
     }
+
+    formElement.reset();
+    setMessage("Comparaison enregistrée.");
+    await load("La comparaison a été créée, mais la photothèque n’a pas pu être actualisée.");
   }
 
   async function archive(photo: ClinicalPhotoApi) {
     const reason = window.prompt("Motif d’archivage");
     if (!reason) return;
-    setBusy(true);
-    setError("");
+    setArchiveBusy(true);
+    setArchiveError("");
+    setGalleryError("");
+    setMessage("");
     try {
       await archiveClinicalPhoto(photo.id, reason);
-      setMessage("Photo archivée.");
-      await load();
     } catch (cause) {
-      setError(documentErrorMessage(cause));
+      setArchiveError(clinicalPhotoErrorMessage(cause, "Impossible d’archiver la photo."));
+      return;
     } finally {
-      setBusy(false);
+      setArchiveBusy(false);
     }
+
+    setMessage("Photo archivée.");
+    await load("La photo a été archivée, mais la photothèque n’a pas pu être actualisée.");
   }
 
   async function download(photo: ClinicalPhotoApi) {
     try {
       await downloadBlob(fetchClinicalPhotoBlob(photo.id, "download"), photo.original_filename || `photo-${photo.id}.jpg`);
     } catch (cause) {
-      setError(documentErrorMessage(cause));
+      setArchiveError(clinicalPhotoErrorMessage(cause, "Impossible de télécharger la photo."));
     }
   }
 
@@ -210,7 +275,7 @@ export function PatientPhotosSection({ patient }: { patient: Patient }) {
         </div>
       </div>
       {message && <p className={workspace.feedback}>{message}</p>}
-      {error && <p role="alert">{error}</p>}
+      {galleryError && <p role="alert">{galleryError}</p>}
       {canWrite && (
         <div className={workspace.twoColumns}>
           <form className={ui.form} onSubmit={submitSet}>
@@ -220,18 +285,29 @@ export function PatientPhotosSection({ patient }: { patient: Patient }) {
               <label>Zone anatomique<input name="anatomical_area" required /></label>
               <label>Date de prise<input name="captured_at" type="datetime-local" defaultValue={localDateTimeInput()} /></label>
               <label>Notes<textarea name="notes" /></label>
-              <button className={ui.action} disabled={busy}>Créer série</button>
+              {seriesError && <p role="alert">{seriesError}</p>}
+              <button className={ui.action} disabled={seriesBusy}>{seriesBusy ? "Création…" : "Créer série"}</button>
             </fieldset>
           </form>
           <form className={ui.form} onSubmit={submitPhoto}>
             <fieldset className={workspace.fieldset}>
               <legend>Importer une photo</legend>
               <label>Série
-                <select name="photo_set">
+                <select
+                  name="photo_set"
+                  value={selectedSetId}
+                  onChange={(event) => setSelectedSetId(event.target.value)}
+                  disabled={seriesLoading}
+                  aria-invalid={uploadSeriesState === "failed" || undefined}
+                  aria-describedby="photo-series-status"
+                >
                   <option value="">Sans série</option>
-                  {sets.map((set) => <option key={set.id} value={set.id}>{set.title}</option>)}
+                  {uploadSeries.map((set) => <option key={set.id} value={set.id}>{photoSetOptionLabel(set)}</option>)}
                 </select>
               </label>
+              {uploadSeriesState === "loading" && <small id="photo-series-status" role="status">Chargement des séries…</small>}
+              {uploadSeriesState === "empty" && <small id="photo-series-status">Aucune série créée pour ce patient.</small>}
+              {uploadSeriesState === "failed" && <p id="photo-series-status" role="alert">{seriesLoadError}</p>}
               <label>Type
                 <select name="photo_type" required>
                   {photoTypes.map((type) => <option key={type} value={type}>{photoTypeLabels[type]}</option>)}
@@ -246,7 +322,8 @@ export function PatientPhotosSection({ patient }: { patient: Patient }) {
               <label>Date<input name="captured_at" type="datetime-local" defaultValue={localDateTimeInput()} /></label>
               <label>Image<input name="image" type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" required /></label>
               <label>Description<textarea name="description" /></label>
-              <button className={`${ui.action} ${ui.primary}`} disabled={busy}>Importer photo</button>
+              {photoError && <p role="alert">{photoError}</p>}
+              <button className={`${ui.action} ${ui.primary}`} disabled={photoBusy}>{photoBusy ? "Import…" : "Importer photo"}</button>
             </fieldset>
           </form>
         </div>
@@ -254,6 +331,23 @@ export function PatientPhotosSection({ patient }: { patient: Patient }) {
       {loading ? <p role="status">Chargement des clichés…</p> : (
         <div className={workspace.twoColumns}>
           <div className={photoStyles.grid}>
+            {sets.length > 0 && (
+              <section className={workspace.section}>
+                <h3>Séries</h3>
+                <ul className={workspace.list}>
+                  {sets.map((set) => {
+                    const count = photoCountBySet.get(set.id) ?? 0;
+                    return (
+                      <li key={set.id}>
+                        <strong>{set.title}</strong>
+                        <small>{set.anatomical_area}{set.captured_at ? ` · ${dateTime(set.captured_at)}` : ""}</small>
+                        <small>{count > 0 ? `${count} photo${count > 1 ? "s" : ""}` : "Aucune photo dans cette série."}</small>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            )}
             {filtered.map((photo) => (
               <button
                 key={photo.id}
@@ -295,8 +389,9 @@ export function PatientPhotosSection({ patient }: { patient: Patient }) {
                 </dl>
                 <div className={ui.actions}>
                   <button className={ui.action} onClick={() => void download(selected)}>Télécharger</button>
-                  {canWrite && <button className={ui.action} disabled={busy} onClick={() => void archive(selected)}>Archiver</button>}
+                  {canWrite && <button className={ui.action} disabled={archiveBusy} onClick={() => void archive(selected)}>Archiver</button>}
                 </div>
+                {archiveError && <p role="alert">{archiveError}</p>}
               </section>
             ) : <p>Aucun cliché sélectionné.</p>}
             {canWrite && photos.some((photo) => photo.photo_type === "BEFORE") && photos.some((photo) => photo.photo_type !== "BEFORE") && (
@@ -318,7 +413,8 @@ export function PatientPhotosSection({ patient }: { patient: Patient }) {
                     </select>
                   </label>
                   <label>Notes<textarea name="notes" /></label>
-                  <button className={ui.action} disabled={busy}>Créer comparaison</button>
+                  {comparisonError && <p role="alert">{comparisonError}</p>}
+                  <button className={ui.action} disabled={comparisonBusy}>Créer comparaison</button>
                 </fieldset>
               </form>
             )}

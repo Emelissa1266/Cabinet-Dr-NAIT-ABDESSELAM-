@@ -20,6 +20,11 @@
 .warning h3, .inset h3 { font-size: 13px; margin-bottom: 8px; }
 .warning p, .inset p { margin-block: 6px; }
 .next { border-left: 4px solid var(--primary); }
+.appointments { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
+.appointment { display: flex; justify-content: space-between; gap: 16px; padding: 16px; border-radius: 6px; background: var(--workspace); }
+.appointment strong { display: block; font-weight: 600; margin-bottom: 6px; }
+.appointment p { margin: 4px 0; }
+.appointmentActions { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
 .twoColumns { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
 .twoColumns h3 { font-size: 10px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
 .photos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -31,4 +36,4 @@
 .timeline strong { font-size: 12px; font-weight: 500; }
 .timeline time { display: block; color: var(--muted); font-size: 11px; }
 @media(max-width: 900px) { .columns { grid-template-columns: 1fr; } .identity > div:last-child { margin-left: 0; } }
-@media(max-width: 500px) { .header { padding: 18px; } .twoColumns { grid-template-columns: 1fr; } }
+@media(max-width: 500px) { .header { padding: 18px; } .twoColumns { grid-template-columns: 1fr; } .appointment { flex-direction: column; } .appointmentActions { align-items: flex-start; } }

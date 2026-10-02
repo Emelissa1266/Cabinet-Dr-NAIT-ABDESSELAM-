@@ -268,7 +268,7 @@ export function AgendaCalendar({ basePath = "/agenda", initialDate = today(), in
 
   return <div className={ui.page}>
     <header className={ui.heading}>
-      <div><h1 className={ui.title}>Agenda</h1><p className={ui.description}>Planning synchronisé avec le backend · {appointments.length} rendez-vous affiché(s)</p></div>
+      <div><h1 className={ui.title}>Agenda</h1><p className={ui.description}>Planning des rendez-vous · {appointments.length} rendez-vous affiché(s)</p></div>
       <div className={ui.actions}><button className={ui.action} onClick={() => window.print()}>Imprimer</button><button className={`${ui.action} ${ui.primary}`} onClick={() => { setFormMode("create"); setSelected(null); setErrors({}); setFeedback(""); }}>Nouveau rendez-vous</button></div>
     </header>
     <div className={styles.toolbar}>
@@ -309,7 +309,7 @@ function AppointmentDetails({ basePath, appointment, busy, pendingAction, onEdit
     <h3>{appointment.patient}</h3><StatusBadge tone={appointment.status === "CANCELLED" ? "error" : appointment.status === "SCHEDULED" ? "warning" : "teal"}>{appointment.statusLabel}</StatusBadge>
     <dl><dt>Type</dt><dd>{appointment.type}</dd><dt>Date</dt><dd>{labelClinicDate(appointment.date, { dateStyle: "full" })}</dd><dt>Horaire</dt><dd>{appointment.start} – {appointment.end}</dd><dt>Personnel principal</dt><dd>{appointment.doctor}</dd><dt>Motif</dt><dd>{appointment.reason || "Non renseigné"}</dd><dt>Notes</dt><dd>{appointment.notes || "Aucune note"}</dd></dl>
     <div className={ui.actions}>{actions.filter((actionItem) => actionItem.show).map((actionItem) => <button key={actionItem.label} className={`${ui.action} ${ui.primary}`} disabled={busy} onClick={() => onAction(actionItem.label, actionItem.run)}>{pendingAction === actionItem.label ? "En cours…" : actionItem.label}</button>)}{!terminalStatuses.includes(appointment.status) && <button className={ui.action} disabled={busy} onClick={onReschedule}>Déplacer</button>}<button className={ui.action} disabled={busy} onClick={onEdit}>Modifier les notes</button><Link className={ui.action} href={`${patientBasePath}/${appointment.patientId}`}>Dossier patient</Link>{basePath.startsWith("/secretary") && <Link className={ui.action} href={`/secretary/billing?new=1&patient=${appointment.patientId}&appointment=${appointment.id}`}>Facturation</Link>}</div>
-    {!terminalStatuses.includes(appointment.status) && <div><label>Motif d’annulation<input value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} placeholder="Motif requis par le backend" /></label><button className={ui.action} disabled={busy || !cancelReason.trim()} onClick={() => onAction("Annuler", () => cancelAppointment(appointment.apiId, cancelReason))}>Annuler le rendez-vous</button></div>}
+    {!terminalStatuses.includes(appointment.status) && <div><label>Motif d’annulation<input value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} placeholder="Motif requis" /></label><button className={ui.action} disabled={busy || !cancelReason.trim()} onClick={() => onAction("Annuler", () => cancelAppointment(appointment.apiId, cancelReason))}>Annuler le rendez-vous</button></div>}
   </div>;
 }
 
@@ -345,7 +345,7 @@ function AppointmentForm({ appointment, patients, patientQuery, appointmentTypes
     <label>Motif<input name="reason" defaultValue={appointment?.reason ?? ""} /></label>{field(errors, "reason")}
     <label>Notes d’accueil<textarea name="notes" defaultValue={appointment?.notes ?? ""} /></label>{field(errors, "notes")}
     <label>Notes internes<textarea name="internal_notes" defaultValue={appointment?.internalNotes ?? ""} /></label>{field(errors, "internal_notes")}
-    {!appointment && <button type="button" className={ui.action} disabled={!canSubmit} onClick={(event) => void onAvailability(event.currentTarget.form!)}>Voir les créneaux backend</button>}
+    {!appointment && <button type="button" className={ui.action} disabled={!canSubmit} onClick={(event) => void onAvailability(event.currentTarget.form!)}>Voir les créneaux disponibles</button>}
     <AvailabilityList slots={availability} onSelect={selectSlot} />
     <div className={ui.actions}><button className={`${ui.action} ${ui.primary}`} disabled={busy || !canSubmit}>{busy ? "Enregistrement…" : "Enregistrer"}</button><button type="button" className={ui.action} disabled={busy} onClick={onCancel}>Annuler</button></div>
   </form>;
@@ -360,10 +360,10 @@ function RescheduleForm({ appointment, busy, errors, availability, onCancel, onS
   }
   return <form className={ui.form} onSubmit={onSubmit}>
     <input type="hidden" name="primary_staff" value={appointment.primaryStaffId} /><input type="hidden" name="appointment_type" value={appointment.appointmentTypeId} />
-    <p>Le déplacement utilise l’action backend dédiée et conserve l’historique de replanification.</p>
+    <p>Le déplacement conserve l’historique de replanification.</p>
     <div className={ui.actions}><label>Date *<input name="date" type="date" required value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} /></label><label>Heure *<input name="time" type="time" required value={selectedTime} onChange={(event) => setSelectedTime(event.target.value)} /></label><label>Durée *<input name="duration" type="number" min={5} max={480} required defaultValue={durationMinutes(appointment)} /></label></div>
     <label>Raison du déplacement<textarea name="reason" /></label>{field(errors, "new_start_at")}
-    <button type="button" className={ui.action} onClick={(event) => void onAvailability(event.currentTarget.form!)}>Voir les créneaux backend</button>
+    <button type="button" className={ui.action} onClick={(event) => void onAvailability(event.currentTarget.form!)}>Voir les créneaux disponibles</button>
     <AvailabilityList slots={availability} onSelect={selectSlot} />
     <div className={ui.actions}><button className={`${ui.action} ${ui.primary}`} disabled={busy}>{busy ? "Déplacement…" : "Déplacer"}</button><button type="button" className={ui.action} disabled={busy} onClick={onCancel}>Annuler</button></div>
   </form>;

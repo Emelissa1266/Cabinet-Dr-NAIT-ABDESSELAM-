@@ -68,7 +68,7 @@ export function PhotoLibrary({ initialPatientId }: { initialPatientId?: string }
         <div>
           <p className={ui.eyebrow}>Imagerie clinique privée</p>
           <h1 className={ui.title}>Photothèque</h1>
-          <p className={ui.description}>Clichés patients servis par endpoints authentifiés, sans URL média publique.</p>
+          <p className={ui.description}>Clichés patients sécurisés, sans URL média publique.</p>
         </div>
       </header>
       <div className={ui.toolbar}>

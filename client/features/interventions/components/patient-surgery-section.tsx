@@ -42,7 +42,7 @@ export function PatientSurgerySection({ patient }: { patient: Patient }) {
       <div className={ui.heading}>
         <div>
           <h2>Interventions</h2>
-          <p>Historique chirurgical chargé depuis le backend Surgery.</p>
+          <p>Historique chirurgical du patient.</p>
         </div>
         <Link className={ui.action} href="/interventions">Ouvrir le module</Link>
       </div>

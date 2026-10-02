@@ -8,6 +8,7 @@ from django.utils import timezone
 from PIL import Image
 from rest_framework import status
 
+from apps.accounts.models import User
 from apps.audit.models import AuditLog
 from apps.care.models import Care, CareCategory, CareSession, CareType
 from apps.documents.models import (
@@ -285,6 +286,167 @@ def test_photo_set_and_comparison_validation(api_client, doctor_user, patient, o
     assert ClinicalPhotoSet.objects.count() == 1
     assert ClinicalPhotoComparison.objects.count() == 1
     assert AuditLog.objects.filter(action="CLINICAL_PHOTO_COMPARISON_CREATED").exists()
+
+
+def test_empty_photo_set_can_be_created_then_receive_photos_without_weakening_security(
+    api_client,
+    doctor_user,
+    secretary_user,
+    patient,
+):
+    api_client.force_authenticate(user=doctor_user)
+    payload = {
+        "patient": patient.id,
+        "title": "Suivi postopératoire",
+        "anatomical_area": "Visage",
+        "captured_at": timezone.now().isoformat(),
+        "notes": "Contrôle d'évolution",
+    }
+    photo_set = api_client.post("/api/v1/clinical-photo-sets/", payload, format="json")
+
+    assert photo_set.status_code == status.HTTP_201_CREATED
+    persisted_set = ClinicalPhotoSet.objects.get(pk=photo_set.data["id"])
+    assert persisted_set.photos.count() == 0
+    assert persisted_set.created_by == doctor_user
+
+    attached = upload_photo(api_client, doctor_user, patient, photo_set=photo_set.data["id"], image=image_file("attached.png", "PNG"))
+    standalone = upload_photo(api_client, doctor_user, patient, photo_set="", image=image_file("standalone.png", "PNG"))
+    invalid = api_client.post(
+        "/api/v1/clinical-photos/",
+        {
+            "patient": patient.id,
+            "photo_set": photo_set.data["id"],
+            "photo_type": ClinicalPhoto.PhotoType.AFTER,
+            "anatomical_area": "Visage",
+            "image": SimpleUploadedFile("bad.jpg", b"not an image", content_type="image/jpeg"),
+        },
+        format="multipart",
+    )
+    persisted_set.refresh_from_db()
+    attached_photo = ClinicalPhoto.objects.get(pk=attached.data["id"])
+    standalone_photo = ClinicalPhoto.objects.get(pk=standalone.data["id"])
+    view = api_client.get(f"/api/v1/clinical-photos/{attached_photo.id}/view/")
+    api_client.force_authenticate(user=None)
+    anonymous_view = api_client.get(f"/api/v1/clinical-photos/{attached_photo.id}/view/")
+    anonymous_create = api_client.post("/api/v1/clinical-photo-sets/", payload, format="json")
+    api_client.force_authenticate(user=secretary_user)
+    secretary_create = api_client.post("/api/v1/clinical-photo-sets/", payload, format="json")
+
+    assert attached.status_code == status.HTTP_201_CREATED
+    assert attached_photo.photo_set == persisted_set
+    assert persisted_set.photos.count() == 1
+    assert standalone.status_code == status.HTTP_201_CREATED
+    assert standalone_photo.photo_set is None
+    assert invalid.status_code == status.HTTP_400_BAD_REQUEST
+    assert persisted_set.photos.count() == 1
+    assert view.status_code == status.HTTP_200_OK
+    assert view["X-Content-Type-Options"] == "nosniff"
+    assert anonymous_view.status_code == status.HTTP_401_UNAUTHORIZED
+    assert anonymous_create.status_code == status.HTTP_401_UNAUTHORIZED
+    assert secretary_create.status_code == status.HTTP_403_FORBIDDEN
+
+
+def test_photo_set_patient_filter_returns_patient_records_independent_of_creator_and_without_photos(
+    api_client,
+    admin_user,
+    doctor_user,
+    nurse_user,
+    secretary_user,
+    make_user,
+    patient,
+    other_patient,
+):
+    other_doctor = make_user(role=User.Role.DOCTOR, username="photo-set-other-doctor")
+    face_set = ClinicalPhotoSet.objects.create(
+        patient=patient,
+        title="Suivi postopératoire",
+        anatomical_area="Visage",
+        created_by=doctor_user,
+    )
+    abdomen_set = ClinicalPhotoSet.objects.create(
+        patient=patient,
+        title="Cicatrisation",
+        anatomical_area="Abdomen",
+        created_by=other_doctor,
+    )
+    other_patient_set = ClinicalPhotoSet.objects.create(
+        patient=other_patient,
+        title="Autre patient",
+        anatomical_area="Visage",
+        created_by=other_doctor,
+    )
+
+    for user in (admin_user, doctor_user, nurse_user):
+        api_client.force_authenticate(user=user)
+        response = api_client.get(f"/api/v1/clinical-photo-sets/?patient={patient.id}")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["count"] == 2
+        assert {item["id"] for item in response.data["results"]} == {face_set.id, abdomen_set.id}
+        assert other_patient_set.id not in {item["id"] for item in response.data["results"]}
+
+    api_client.force_authenticate(user=nurse_user)
+    nurse_response = api_client.get(f"/api/v1/clinical-photo-sets/?patient={patient.id}")
+    returned_face_set = next(item for item in nurse_response.data["results"] if item["id"] == face_set.id)
+    returned_abdomen_set = next(item for item in nurse_response.data["results"] if item["id"] == abdomen_set.id)
+
+    assert returned_face_set["created_by"] == doctor_user.id
+    assert returned_abdomen_set["created_by"] == other_doctor.id
+    assert returned_face_set["consultation"] is None
+    assert returned_face_set["surgery"] is None
+    assert face_set.photos.count() == 0
+    assert abdomen_set.photos.count() == 0
+
+    api_client.force_authenticate(user=None)
+    anonymous = api_client.get(f"/api/v1/clinical-photo-sets/?patient={patient.id}")
+    api_client.force_authenticate(user=secretary_user)
+    secretary = api_client.get(f"/api/v1/clinical-photo-sets/?patient={patient.id}")
+
+    assert anonymous.status_code == status.HTTP_401_UNAUTHORIZED
+    assert secretary.status_code == status.HTTP_403_FORBIDDEN
+
+
+def test_clinical_photo_security_remains_after_patient_scoped_photo_set_listing(
+    api_client,
+    nurse_user,
+    secretary_user,
+    patient,
+    other_patient,
+):
+    photo_set = ClinicalPhotoSet.objects.create(
+        patient=patient,
+        title="Suivi postopératoire",
+        anatomical_area="Visage",
+        created_by=nurse_user,
+    )
+
+    cross_patient = upload_photo(
+        api_client,
+        nurse_user,
+        other_patient,
+        photo_set=photo_set.id,
+        image=image_file("cross-patient.png", "PNG"),
+    )
+    attached = upload_photo(
+        api_client,
+        nurse_user,
+        patient,
+        photo_set=photo_set.id,
+        image=image_file("attached.png", "PNG"),
+    )
+    photo = ClinicalPhoto.objects.get(pk=attached.data["id"])
+    nurse_view = api_client.get(f"/api/v1/clinical-photos/{photo.id}/view/")
+    api_client.force_authenticate(user=None)
+    anonymous_view = api_client.get(f"/api/v1/clinical-photos/{photo.id}/view/")
+    api_client.force_authenticate(user=secretary_user)
+    secretary_view = api_client.get(f"/api/v1/clinical-photos/{photo.id}/view/")
+
+    assert cross_patient.status_code == status.HTTP_400_BAD_REQUEST
+    assert attached.status_code == status.HTTP_201_CREATED
+    assert photo.photo_set == photo_set
+    assert nurse_view.status_code == status.HTTP_200_OK
+    assert anonymous_view.status_code == status.HTTP_401_UNAUTHORIZED
+    assert secretary_view.status_code == status.HTTP_403_FORBIDDEN
 
 
 def test_rbac_doctor_nurse_secretary_and_admin(

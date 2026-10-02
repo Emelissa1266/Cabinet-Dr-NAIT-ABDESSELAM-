@@ -64,9 +64,4 @@ class ClinicalPhotoPermission(BasePermission):
 
     def has_object_permission(self, request, view, obj):
         user = request.user
-        if user.role in {User.Role.ADMIN, User.Role.DOCTOR}:
-            return True
-        if user.role == User.Role.NURSE:
-            care_links = obj.patient.cares.filter(assigned_nurse=user).exists()
-            return care_links
-        return False
+        return user.role in {User.Role.ADMIN, User.Role.DOCTOR, User.Role.NURSE}

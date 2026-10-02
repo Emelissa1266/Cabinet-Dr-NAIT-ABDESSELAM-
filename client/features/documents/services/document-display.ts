@@ -26,7 +26,7 @@ export const viewAngleLabels: Record<ClinicalPhotoViewAngle, string> = {
 
 export function documentErrorMessage(cause: unknown) {
   if (cause instanceof ApiError) {
-    if (cause.status === 0) return "Connexion au backend impossible.";
+    if (cause.status === 0) return "Connexion au serveur impossible.";
     if (cause.status === 403) return "Accès refusé pour ce fichier clinique.";
     if (cause.status === 404) return "Fichier introuvable ou non accessible.";
     return `${cause.status} — ${cause.message}`;

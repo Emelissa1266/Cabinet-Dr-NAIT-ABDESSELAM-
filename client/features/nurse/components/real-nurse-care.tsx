@@ -267,7 +267,7 @@ export function RealNurseCare({ initialSession }: { initialSession?: string }) {
         <div>
           <p className={styles.eyebrow}>Soins assignés</p>
           <h1>Soins</h1>
-          <p>Exécution infirmière réelle, paramètres dynamiques et traçabilité backend.</p>
+          <p>Exécution infirmière, paramètres dynamiques et traçabilité clinique.</p>
         </div>
         <span className={styles.dateBadge}>{user?.displayName ?? user?.username ?? "Infirmier(ère)"} · Backend Care</span>
       </header>
@@ -322,7 +322,7 @@ export function RealNurseCare({ initialSession }: { initialSession?: string }) {
                 <p>{careSessionTime(selected)} · {selected.notes || "Aucune note de planification."}</p>
                 <div className={styles.progressLabel}><span>{selectedCare.completed_sessions}/{selectedCare.planned_sessions} séances réalisées</span><strong>{selectedCare.remaining_sessions} restantes</strong></div>
                 <progress value={selectedCare.completed_sessions} max={selectedCare.planned_sessions} />
-                <p>{selectedCare.progress_percentage}% calculé par le backend.</p>
+                <p>{selectedCare.progress_percentage}% calculé.</p>
               </div>
               <div className={styles.inset}>
                 <small>Instructions médicales en lecture seule</small>

@@ -126,7 +126,7 @@ export function PatientList({ basePath = "/patients", initialQuery = "", initial
   return (
     <div className={styles.page}>
       <header className={styles.heading}>
-        <div><p className={styles.eyebrow}>Registre médical</p><h1 className={styles.title}>Patients</h1><p className={styles.description}>{data ? `${data.count} dossiers backend` : "Dossiers patients"}</p></div>
+        <div><p className={styles.eyebrow}>Registre médical</p><h1 className={styles.title}>Patients</h1><p className={styles.description}>{data ? `${data.count} dossiers patients` : "Dossiers patients"}</p></div>
         <div className={styles.actions}><button className={styles.action} disabled={!patients.length} onClick={() => exportList(patients)}><Icon name="export" size={13} />Exporter</button><button className={`${styles.action} ${styles.primary}`} onClick={() => { setFormErrors({}); setFeedback(""); setNewOpen(true); }}><Icon name="add" size={13} />Nouveau patient</button></div>
       </header>
       <div className={styles.toolbar}>
@@ -151,7 +151,7 @@ export function PatientList({ basePath = "/patients", initialQuery = "", initial
         <PatientForm busy={busy} errors={formErrors} onCancel={() => setNewOpen(false)} onSubmit={create} />
       </DetailDialog>
       <DetailDialog title="Supprimer le patient" open={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)}>
-        <p>Confirmez la suppression du dossier de {deleteTarget?.name}. Le backend refusera l’opération si votre rôle ou les contraintes médicales ne l’autorisent pas.</p>
+        <p>Confirmez la suppression du dossier de {deleteTarget?.name}. L’opération peut être refusée si votre rôle ou les contraintes médicales ne l’autorisent pas.</p>
         <div className={styles.actions}><button className={`${styles.action} ${styles.primary}`} disabled={busy} onClick={confirmDelete}>{busy ? "Suppression…" : "Confirmer"}</button><button className={styles.action} disabled={busy} onClick={() => setDeleteTarget(null)}>Annuler</button></div>
       </DetailDialog>
     </div>

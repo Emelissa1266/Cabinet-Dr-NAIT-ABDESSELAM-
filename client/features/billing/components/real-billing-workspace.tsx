@@ -332,7 +332,7 @@ export function RealBillingWorkspace({ initialPatientId, initialInvoiceId, creat
   return (
     <main className={ui.page}>
       <header className={ui.heading}>
-        <div><p className={ui.eyebrow}>Finance cabinet</p><h1 className={ui.title}>Facturation</h1><p className={ui.description}>Factures, paiements, allocations et reçus réels du backend.</p></div>
+        <div><p className={ui.eyebrow}>Finance cabinet</p><h1 className={ui.title}>Facturation</h1><p className={ui.description}>Factures, paiements, allocations et reçus du cabinet.</p></div>
         {canWrite && <button className={`${ui.action} ${ui.primary}`} onClick={() => setCreating(true)}>Nouvelle facture</button>}
       </header>
       <ModuleSummary items={[

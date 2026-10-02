@@ -2,14 +2,16 @@ export type DashboardRole = "ADMIN" | "DOCTOR" | "NURSE" | "SECRETARY";
 
 export interface DashboardAppointmentPreview {
   id: number;
-  patient_reference: string;
+  patient_name: string;
+  appointment_type_name: string;
+  primary_staff_name: string;
   start_at: string;
   status: string;
 }
 
 export interface DashboardSurgeryPreview {
   id: number;
-  patient_reference: string;
+  patient_name: string;
   procedure_name: string;
   planned_date: string;
   status: string;
@@ -17,9 +19,11 @@ export interface DashboardSurgeryPreview {
 
 export interface DashboardCareSessionPreview {
   id: number;
-  patient_reference: string;
+  patient_name: string;
+  care_type_name: string;
   scheduled_at: string;
   status: string;
+  planned_sessions: number;
 }
 
 export interface DashboardFinancial {
@@ -45,12 +49,16 @@ export interface DoctorDashboardApi {
     appointments: DashboardAppointmentPreview[];
   };
   upcoming: {
+    appointments_count: number;
+    appointments: DashboardAppointmentPreview[];
     surgeries_count: number;
     surgeries: DashboardSurgeryPreview[];
     postoperative_followups_count: number;
   };
   pending: {
+    appointments_in_progress_count: number;
     preop_attention_count: number;
+    active_care_count: number;
   };
   statistics: {
     unread_notifications_count: number;
@@ -60,14 +68,19 @@ export interface DoctorDashboardApi {
 export interface NurseDashboardApi {
   role: "NURSE";
   today: {
-    assigned_sessions_count: number;
+    appointments_count: number;
+    appointments: DashboardAppointmentPreview[];
+    planned_sessions_count: number;
     completed_sessions_count: number;
   };
   upcoming: {
+    appointments_count: number;
+    appointments: DashboardAppointmentPreview[];
     care_sessions_count: number;
     care_sessions: DashboardCareSessionPreview[];
   };
   pending: {
+    appointments_in_progress_count: number;
     in_progress_sessions_count: number;
     assigned_care_count: number;
   };
@@ -86,6 +99,7 @@ export interface SecretaryDashboardApi {
   };
   upcoming: {
     appointments_count: number;
+    appointments: DashboardAppointmentPreview[];
   };
   pending: {
     cancelled_count: number;

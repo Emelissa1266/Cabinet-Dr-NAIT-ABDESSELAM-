@@ -1,11 +1,6 @@
-import { ApiError } from "@/lib/api-client";
-
 export function dashboardErrorMessage(cause: unknown) {
-  if (cause instanceof ApiError) {
-    if (cause.status === 0) return "Connexion au backend impossible.";
-    return `${cause.status} — ${cause.message}`;
-  }
-  return "Le tableau de bord n’a pas pu être chargé.";
+  void cause;
+  return "Impossible de charger le tableau de bord.";
 }
 
 export function dateTime(value: string | null | undefined) {

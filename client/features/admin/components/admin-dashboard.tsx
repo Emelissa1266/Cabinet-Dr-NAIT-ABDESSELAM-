@@ -5,30 +5,52 @@ import { useEffect, useState } from "react";
 import { Icon, type IconName } from "@/components/shared/icon";
 import { getDashboard } from "@/features/dashboard/services/dashboard-api-service";
 import type { AdminDashboardApi } from "@/features/dashboard/api-types";
+import { dashboardErrorMessage, money } from "@/features/dashboard/services/dashboard-display";
 import ui from "@/components/ui/clinical.module.css";
 import { AdminGuard } from "./admin-guard";
 
 const sections: Array<{ href: string; label: string; description: string; icon: IconName }> = [
-  { href: "/admin/users", label: "Utilisateurs", description: "Comptes, roles, activation et acces.", icon: "patients" },
-  { href: "/admin/care", label: "Soins", description: "Categories, types de soins et parametres.", icon: "care" },
+  { href: "/admin/users", label: "Utilisateurs", description: "Comptes, rôles, activation et accès.", icon: "patients" },
+  { href: "/admin/care", label: "Soins", description: "Catégories, types de soins et paramètres.", icon: "care" },
   { href: "/admin/agenda", label: "Agenda", description: "Types de rendez-vous, horaires et fermetures.", icon: "agenda" },
-  { href: "/admin/surgery", label: "Interventions", description: "Configuration des interventions et preoperatoire.", icon: "interventions" },
+  { href: "/admin/surgery", label: "Interventions", description: "Configuration des interventions et préopératoire.", icon: "interventions" },
   { href: "/admin/billing", label: "Facturation", description: "Services facturables et tarifs.", icon: "billing" },
-  { href: "/admin/documents", label: "Documents", description: "Categories de documents.", icon: "patient-folder" },
+  { href: "/admin/documents", label: "Documents", description: "Catégories de documents.", icon: "patient-folder" },
 ];
 
 export function AdminDashboard() {
   const [dashboard, setDashboard] = useState<AdminDashboardApi | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  async function load() {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await getDashboard();
+      if (data.role === "ADMIN") setDashboard(data);
+      else setError("Tableau de bord administrateur indisponible.");
+    } catch (cause) {
+      setDashboard(null);
+      setError(dashboardErrorMessage(cause));
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     let active = true;
     getDashboard()
       .then((data) => {
-        if (active && data.role === "ADMIN") setDashboard(data);
+        if (!active) return;
+        if (data.role === "ADMIN") setDashboard(data);
+        else setError("Tableau de bord administrateur indisponible.");
       })
       .catch((cause) => {
-        if (active) setError(cause instanceof Error ? cause.message : "Dashboard administrateur indisponible.");
+        if (active) setError(dashboardErrorMessage(cause));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
       });
     return () => { active = false; };
   }, []);
@@ -40,16 +62,18 @@ export function AdminDashboard() {
           <div>
             <p className={ui.eyebrow}>Administration</p>
             <h1 className={ui.title}>Back office du cabinet</h1>
-            <p className={ui.description}>Configuration systeme, utilisateurs et catalogues transverses.</p>
+            <p className={ui.description}>Configuration système, utilisateurs et catalogues transverses.</p>
           </div>
+          <button className={ui.action} disabled={loading} onClick={() => void load()}>{loading ? "Actualisation…" : "Actualiser"}</button>
         </header>
         {error && <p className={ui.panel} role="alert">{error}</p>}
+        {loading && <p className={ui.panel} role="status">Chargement du tableau de bord…</p>}
         {dashboard && (
           <section className={ui.toolbar} aria-label="Indicateurs administrateur">
             <article className={ui.panel}><h2>Utilisateurs actifs</h2><p>{dashboard.statistics.active_users_count}</p></article>
             <article className={ui.panel}><h2>Rendez-vous du jour</h2><p>{dashboard.today.appointments_count}</p></article>
-            <article className={ui.panel}><h2>Interventions a venir</h2><p>{dashboard.upcoming.surgeries_count}</p></article>
-            <article className={ui.panel}><h2>Encours financier</h2><p>{dashboard.financial.outstanding_amount}</p></article>
+            <article className={ui.panel}><h2>Interventions à venir</h2><p>{dashboard.upcoming.surgeries_count}</p></article>
+            <article className={ui.panel}><h2>Encours financier</h2><p>{money(dashboard.financial.outstanding_amount)}</p></article>
           </section>
         )}
         <section className={ui.adminGrid} aria-label="Modules administrateur">
@@ -68,7 +92,7 @@ export function AdminDashboard() {
               {dashboard.recent_activity.map((item, index) => (
                 <li key={`${item.created_at}-${index}`}>
                   <strong>{item.action}</strong>
-                  <small>{item.entity_type} - {item.actor || "Systeme"} - {new Date(item.created_at).toLocaleString("fr-DZ")}</small>
+                  <small>{item.entity_type} - {item.actor || "Système"} - {new Date(item.created_at).toLocaleString("fr-DZ")}</small>
                 </li>
               ))}
             </ul>

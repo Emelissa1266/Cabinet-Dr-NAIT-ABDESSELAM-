@@ -1,0 +1,11 @@
+.formSection { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 18px; border-radius: 8px; background: var(--workspace); }
+.formSection h3 { grid-column: 1 / -1; font-size: 15px; font-weight: 600; color: var(--text); }
+.schedule { display: flex; flex-direction: column; gap: 14px; padding: 18px; border-radius: 8px; background: var(--workspace); }
+.schedule h3 { font-size: 15px; font-weight: 600; color: var(--text); }
+.schedule p { color: var(--muted); font-size: 13px; }
+.day { padding: 14px; border-radius: 6px; background: var(--surface); }
+.dayHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.interval { display: grid; grid-template-columns: minmax(90px, .75fr) minmax(120px, 1fr) minmax(120px, 1fr) auto; align-items: end; gap: 10px; padding-top: 10px; }
+.interval label:first-child { align-items: flex-start; }
+.interval input[type="checkbox"] { width: auto; }
+@media (max-width: 760px) { .formSection { grid-template-columns: 1fr; } .interval { grid-template-columns: 1fr; align-items: stretch; } .dayHeader { align-items: flex-start; flex-direction: column; } }

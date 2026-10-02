@@ -42,7 +42,7 @@ export function agendaErrorMessage(error: unknown) {
     if (error.status === 0) return "Connexion au serveur impossible.";
     if (error.status === 400) {
       const translated = validationMessages(error.data).map(translateValidationMessage);
-      return translated[0] ?? "Le backend a refusé ce créneau ou ces informations.";
+      return translated[0] ?? "Ce créneau ou ces informations ne peuvent pas être enregistrés.";
     }
     if (error.status === 401) return "Votre session a expiré. Reconnectez-vous.";
     if (error.status === 403) return "Vous n’avez pas l’autorisation d’effectuer cette action.";
