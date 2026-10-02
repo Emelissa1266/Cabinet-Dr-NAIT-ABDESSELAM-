@@ -141,7 +141,7 @@ export function PatientDetail({ id, basePath = "/patients" }: { id: string; base
         <PatientForm patient={patient} busy={busy} errors={fieldErrorState} onCancel={() => setEditing(false)} onSubmit={save} />
       </DetailDialog>
       <DetailDialog title="Supprimer le patient" open={deleting} onClose={() => setDeleting(false)}>
-        <p>Confirmez la suppression du dossier {patient.patientReference}. Le backend reste l’autorité et peut refuser cette action.</p>
+        <p>Confirmez la suppression du dossier de {patient.name}. Le backend reste l’autorité et peut refuser cette action.</p>
         <div className={ui.actions}><button className={`${ui.action} ${ui.primary}`} disabled={busy} onClick={confirmDelete}>{busy ? "Suppression…" : "Confirmer"}</button><button className={ui.action} disabled={busy} onClick={() => setDeleting(false)}>Annuler</button></div>
       </DetailDialog>
     </div>

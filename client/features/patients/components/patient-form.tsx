@@ -75,7 +75,6 @@ export function PatientForm({
   return (
     <form className={styles.form} onSubmit={submit} noValidate>
       <h3>État civil</h3>
-      {patient && <label>Référence patient<input readOnly value={patient.patientReference} /></label>}
       {input("last_name", "Nom *", "text", true)}
       {input("first_name", "Prénom *", "text", true)}
       {input("date_of_birth", "Date de naissance", "date")}

@@ -5,6 +5,7 @@ from apps.accounts.models import User
 
 from .models import (
     AnesthesiaRecord,
+    InterventionType,
     IntraoperativeEvent,
     PostoperativeAssessment,
     PostoperativeFollowUp,
@@ -27,12 +28,21 @@ def raise_drf_validation(error):
 
 
 class SurgerySerializer(serializers.ModelSerializer):
+    intervention_type_name = serializers.CharField(source="intervention_type.name", read_only=True)
+    intervention_type_code = serializers.CharField(source="intervention_type.code", read_only=True)
+
     class Meta:
         model = Surgery
         fields = "__all__"
+        extra_kwargs = {
+            "procedure_name": {"required": False, "allow_blank": True},
+            "procedure_code": {"required": False, "allow_blank": True},
+        }
         read_only_fields = (
             "id",
             "surgeon",
+            "intervention_type_name",
+            "intervention_type_code",
             "status",
             "actual_start_at",
             "actual_end_at",
@@ -46,6 +56,23 @@ class SurgerySerializer(serializers.ModelSerializer):
         actor = self.context["request"].user
         if actor.role != User.Role.DOCTOR:
             raise serializers.ValidationError("Only doctors can author surgery decisions.")
+        selected_type = attrs.get("intervention_type")
+        intervention_type_changed = "intervention_type" in attrs and (
+            not self.instance or attrs["intervention_type"] != self.instance.intervention_type
+        )
+        if intervention_type_changed:
+            if self.instance and self.instance.status not in {Surgery.Status.DRAFT, Surgery.Status.PLANNED}:
+                raise serializers.ValidationError("Intervention identity can only be changed before pre-operative workflow starts.")
+            if selected_type and not selected_type.is_active:
+                raise serializers.ValidationError("Inactive intervention types cannot be selected for a surgery.")
+            if selected_type:
+                attrs["procedure_name"] = selected_type.name
+                attrs["procedure_code"] = selected_type.code
+                if not attrs.get("procedure_description"):
+                    attrs["procedure_description"] = selected_type.description
+        next_procedure_name = attrs.get("procedure_name", getattr(self.instance, "procedure_name", ""))
+        if not selected_type and not str(next_procedure_name).strip():
+            raise serializers.ValidationError("Procedure is required when no intervention type is selected.")
         instance = self.instance or Surgery(surgeon=actor)
         for field, value in attrs.items():
             setattr(instance, field, value)
@@ -59,6 +86,13 @@ class SurgerySerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         return Surgery.objects.create(surgeon=self.context["request"].user, **validated_data)
+
+
+class InterventionTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InterventionType
+        fields = "__all__"
+        read_only_fields = ("id", "created_at", "updated_at")
 
 
 class SurgeryCancelSerializer(serializers.Serializer):

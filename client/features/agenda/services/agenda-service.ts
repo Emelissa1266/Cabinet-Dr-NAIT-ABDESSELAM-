@@ -66,7 +66,7 @@ export function mapAppointment(appointment: BackendAppointment, types: Appointme
     apiId: appointment.id,
     patientId: appointment.patient,
     patientReference: appointment.patient_reference,
-    patient: appointment.patient_name || appointment.patient_reference,
+    patient: appointment.patient_name || "Patient",
     appointmentTypeId: appointment.appointment_type,
     type: appointment.appointment_type_name,
     typeCategory,

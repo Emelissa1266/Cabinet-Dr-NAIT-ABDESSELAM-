@@ -9,6 +9,7 @@ from apps.audit.services import record_audit_event
 
 from .models import (
     AnesthesiaRecord,
+    InterventionType,
     IntraoperativeEvent,
     PostoperativeAssessment,
     PostoperativeFollowUp,
@@ -24,11 +25,14 @@ from .models import (
 )
 from .permissions import (
     DoctorOnlySurgeryPermission,
+    InterventionTypePermission,
     PreoperativeExecutionPermission,
+    SurgeryConfigurationPermission,
     SurgeryPermission,
 )
 from .serializers import (
     AnesthesiaRecordSerializer,
+    InterventionTypeSerializer,
     IntraoperativeEventSerializer,
     PostoperativeAssessmentSerializer,
     PostoperativeFollowUpSerializer,
@@ -89,8 +93,22 @@ class AuditCreateUpdateMixin:
         )
 
 
+class InterventionTypeViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
+    queryset = InterventionType.objects.all()
+    serializer_class = InterventionTypeSerializer
+    permission_classes = [InterventionTypePermission]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ("is_active",)
+    search_fields = ("name", "code", "description")
+    ordering_fields = ("name", "code", "created_at")
+    ordering = ("name",)
+    audit_entity_type = "InterventionType"
+    audit_create_action = "INTERVENTION_TYPE_CREATED"
+    audit_update_action = "INTERVENTION_TYPE_UPDATED"
+
+
 class SurgeryViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
-    queryset = Surgery.objects.select_related("patient", "consultation", "surgeon").prefetch_related(
+    queryset = Surgery.objects.select_related("patient", "consultation", "surgeon", "intervention_type").prefetch_related(
         "preop_checklists",
         "preop_requirements",
         "consents",
@@ -103,6 +121,7 @@ class SurgeryViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
     filterset_fields = {
         "patient": ["exact"],
         "surgeon": ["exact"],
+        "intervention_type": ["exact"],
         "status": ["exact"],
         "procedure_name": ["icontains"],
         "planned_date": ["date", "gte", "lte"],
@@ -113,6 +132,9 @@ class SurgeryViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
         "patient__first_name",
         "patient__last_name",
         "procedure_name",
+        "procedure_code",
+        "intervention_type__name",
+        "intervention_type__code",
         "anatomical_site",
     )
     ordering_fields = ("planned_date", "actual_start_at", "created_at", "updated_at")
@@ -196,15 +218,18 @@ class PreoperativeAssessmentViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSe
     audit_update_action = "PREOP_ASSESSMENT_UPDATED"
 
 
-class PreoperativeChecklistItemViewSet(viewsets.ModelViewSet):
+class PreoperativeChecklistItemViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
     queryset = PreoperativeChecklistItem.objects.all()
     serializer_class = PreoperativeChecklistItemSerializer
-    permission_classes = [SurgeryPermission]
+    permission_classes = [SurgeryConfigurationPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ("category", "is_required", "is_active")
     search_fields = ("name", "description", "category")
     ordering_fields = ("sort_order", "name", "created_at")
     ordering = ("sort_order", "name")
+    audit_entity_type = "PreoperativeChecklistItem"
+    audit_create_action = "PREOP_CHECKLIST_ITEM_CREATED"
+    audit_update_action = "PREOP_CHECKLIST_ITEM_UPDATED"
 
 
 class SurgeryPreoperativeChecklistViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):

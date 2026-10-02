@@ -26,6 +26,12 @@ import {
   startAppointment,
   updateAppointment,
 } from "../services/agenda-service";
+import {
+  appointmentTypeDuration,
+  buildCreateAppointmentPayload,
+  compatibleAgendaStaff,
+  defaultAgendaStaff,
+} from "../services/agenda-form";
 import { agendaErrorMessage, agendaFieldErrors, type FieldErrors } from "../services/agenda-errors";
 import { labelClinicDate, localAppointmentIso, shiftClinicDate } from "../utils/clinic-time";
 import ui from "@/components/ui/clinical.module.css";
@@ -50,15 +56,6 @@ function mondayOf(date: string) {
 
 function staffName(staff: AgendaStaff) {
   return staff.display_name || `${staff.first_name} ${staff.last_name}`.trim() || staff.username;
-}
-
-function firstAvailableStaff(staff: AgendaStaff[], type?: AppointmentType, currentUserId?: number) {
-  const candidates = staff.filter((member) => {
-    if (type?.requires_doctor) return member.role === "DOCTOR";
-    if (type?.requires_nurse) return member.role === "NURSE";
-    return ["ADMIN", "DOCTOR", "NURSE"].includes(member.role);
-  });
-  return candidates.find((member) => member.id === currentUserId) ?? candidates[0] ?? staff[0];
 }
 
 function field(errors: FieldErrors, name: string) {
@@ -178,18 +175,16 @@ export function AgendaCalendar({ basePath = "/agenda", initialDate = today(), in
     event.preventDefault();
     if (busy) return;
     const form = new FormData(event.currentTarget);
-    const appointmentType = appointmentTypes.find((type) => type.id === Number(form.get("appointment_type")));
-    const duration = Number(form.get("duration") || appointmentType?.default_duration_minutes || 30);
-    const payload = {
+    const payload = buildCreateAppointmentPayload({
       patient: Number(form.get("patient")),
-      appointment_type: Number(form.get("appointment_type")),
-      primary_staff: Number(form.get("primary_staff")),
-      start_at: localAppointmentIso(String(form.get("date")), String(form.get("time"))),
-      end_at: localAppointmentIso(String(form.get("date")), addMinutes(String(form.get("time")), duration)),
-      reason: String(form.get("reason") ?? "").trim(),
-      notes: String(form.get("notes") ?? "").trim(),
-      internal_notes: String(form.get("internal_notes") ?? "").trim(),
-    };
+      appointmentType: Number(form.get("appointment_type")),
+      primaryStaff: Number(form.get("primary_staff")),
+      date: String(form.get("date")),
+      time: String(form.get("time")),
+      reason: String(form.get("reason") ?? ""),
+      notes: String(form.get("notes") ?? ""),
+      internalNotes: String(form.get("internal_notes") ?? ""),
+    });
     setBusy(true);
     setFeedback("");
     setErrors({});
@@ -269,7 +264,7 @@ export function AgendaCalendar({ basePath = "/agenda", initialDate = today(), in
   const layouts = days.map((day) => layoutAppointments(appointments.filter((item) => item.date === day)));
   const widths = layouts.map((items) => Math.max(160, ...items.map((item) => item.columns * 160)));
   const selectedType = appointmentTypes[0];
-  const defaultStaff = firstAvailableStaff(staff, selectedType, user?.id);
+  const defaultStaff = defaultAgendaStaff(staff, selectedType, user?.id);
 
   return <div className={ui.page}>
     <header className={ui.heading}>
@@ -312,43 +307,69 @@ function AppointmentDetails({ basePath, appointment, busy, pendingAction, onEdit
   ];
   return <div className={ui.form}>
     <h3>{appointment.patient}</h3><StatusBadge tone={appointment.status === "CANCELLED" ? "error" : appointment.status === "SCHEDULED" ? "warning" : "teal"}>{appointment.statusLabel}</StatusBadge>
-    <dl><dt>Référence patient</dt><dd>{appointment.patientReference}</dd><dt>Type</dt><dd>{appointment.type}</dd><dt>Date</dt><dd>{labelClinicDate(appointment.date, { dateStyle: "full" })}</dd><dt>Horaire</dt><dd>{appointment.start} – {appointment.end}</dd><dt>Personnel principal</dt><dd>{appointment.doctor}</dd><dt>Motif</dt><dd>{appointment.reason || "Non renseigné"}</dd><dt>Notes</dt><dd>{appointment.notes || "Aucune note"}</dd></dl>
+    <dl><dt>Type</dt><dd>{appointment.type}</dd><dt>Date</dt><dd>{labelClinicDate(appointment.date, { dateStyle: "full" })}</dd><dt>Horaire</dt><dd>{appointment.start} – {appointment.end}</dd><dt>Personnel principal</dt><dd>{appointment.doctor}</dd><dt>Motif</dt><dd>{appointment.reason || "Non renseigné"}</dd><dt>Notes</dt><dd>{appointment.notes || "Aucune note"}</dd></dl>
     <div className={ui.actions}>{actions.filter((actionItem) => actionItem.show).map((actionItem) => <button key={actionItem.label} className={`${ui.action} ${ui.primary}`} disabled={busy} onClick={() => onAction(actionItem.label, actionItem.run)}>{pendingAction === actionItem.label ? "En cours…" : actionItem.label}</button>)}{!terminalStatuses.includes(appointment.status) && <button className={ui.action} disabled={busy} onClick={onReschedule}>Déplacer</button>}<button className={ui.action} disabled={busy} onClick={onEdit}>Modifier les notes</button><Link className={ui.action} href={`${patientBasePath}/${appointment.patientId}`}>Dossier patient</Link>{basePath.startsWith("/secretary") && <Link className={ui.action} href={`/secretary/billing?new=1&patient=${appointment.patientId}&appointment=${appointment.id}`}>Facturation</Link>}</div>
     {!terminalStatuses.includes(appointment.status) && <div><label>Motif d’annulation<input value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} placeholder="Motif requis par le backend" /></label><button className={ui.action} disabled={busy || !cancelReason.trim()} onClick={() => onAction("Annuler", () => cancelAppointment(appointment.apiId, cancelReason))}>Annuler le rendez-vous</button></div>}
   </div>;
 }
 
 function AppointmentForm({ appointment, patients, patientQuery, appointmentTypes, staff, defaultStaff, defaultDate, initialPatientId, busy, errors, availability, onPatientSearch, onCancel, onSubmit, onAvailability }: { appointment: Appointment | null; patients: Patient[]; patientQuery: string; appointmentTypes: AppointmentType[]; staff: AgendaStaff[]; defaultStaff?: AgendaStaff; defaultDate: string; initialPatientId?: string; busy: boolean; errors: FieldErrors; availability: AvailabilitySlot[]; onPatientSearch: (query: string) => Promise<void>; onCancel: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>; onAvailability: (form: HTMLFormElement) => Promise<void> }) {
-  const type = appointmentTypes.find((item) => item.id === appointment?.appointmentTypeId) ?? appointmentTypes[0];
+  const initialType = appointmentTypes.find((item) => item.id === appointment?.appointmentTypeId) ?? appointmentTypes[0];
+  const [selectedTypeId, setSelectedTypeId] = useState(appointment?.appointmentTypeId ?? initialType?.id ?? 0);
+  const selectedType = appointmentTypes.find((item) => item.id === selectedTypeId) ?? initialType;
+  const matchingStaff = compatibleAgendaStaff(staff, selectedType);
+  const initialStaff = appointment?.primaryStaffId ?? defaultStaff?.id ?? defaultAgendaStaff(staff, selectedType)?.id ?? 0;
+  const [selectedStaffId, setSelectedStaffId] = useState(initialStaff);
+  const [selectedDate, setSelectedDate] = useState(appointment?.date ?? defaultDate);
+  const [selectedTime, setSelectedTime] = useState(appointment?.start ?? "09:00");
+  const duration = appointmentTypeDuration(selectedType);
   const patientId = appointment?.patientId ?? Number(initialPatientId || patients[0]?.apiId || "");
+  const canSubmit = Boolean(appointment) || Boolean(selectedType && selectedStaffId && matchingStaff.length);
+  function selectType(typeId: number) {
+    const nextType = appointmentTypes.find((item) => item.id === typeId);
+    const nextStaff = defaultAgendaStaff(staff, nextType);
+    setSelectedTypeId(typeId);
+    setSelectedStaffId(nextStaff?.id ?? 0);
+  }
+  function selectSlot(slot: AvailabilitySlot) {
+    setSelectedDate(slot.start_at.slice(0, 10));
+    setSelectedTime(new Date(slot.start_at).toLocaleTimeString("fr-DZ", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Africa/Algiers" }));
+  }
   return <form className={ui.form} onSubmit={onSubmit}>
     <label>Rechercher patient<input value={patientQuery} onChange={(event) => void onPatientSearch(event.target.value)} placeholder="Nom, référence, téléphone..." /></label>
-    <label>Patient *<select name="patient" required defaultValue={patientId || ""} disabled={Boolean(appointment)}><option value="" disabled>Sélectionner un patient</option>{patients.map((patient) => <option key={patient.apiId} value={patient.apiId}>{patient.name} · {patient.patientReference}</option>)}</select>{field(errors, "patient")}</label>
-    <label>Type de rendez-vous *<select name="appointment_type" required defaultValue={appointment?.appointmentTypeId ?? type?.id ?? ""} disabled={Boolean(appointment)}>{appointmentTypes.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.default_duration_minutes} min</option>)}</select>{field(errors, "appointment_type")}</label>
-    <label>Personnel principal *<select name="primary_staff" required defaultValue={appointment?.primaryStaffId ?? defaultStaff?.id ?? ""} disabled={Boolean(appointment)}><option value="" disabled>Sélectionner</option>{staff.map((member) => <option key={member.id} value={member.id}>{staffName(member)} · {member.role}</option>)}</select>{field(errors, "primary_staff")}</label>
-    <div className={ui.actions}><label>Date *<input name="date" type="date" required defaultValue={appointment?.date ?? defaultDate} disabled={Boolean(appointment)} /></label><label>Heure *<input name="time" type="time" required defaultValue={appointment?.start ?? "09:00"} disabled={Boolean(appointment)} /></label><label>Durée *<input name="duration" type="number" min={5} max={480} required defaultValue={appointment ? durationMinutes(appointment) : type?.default_duration_minutes ?? 30} disabled={Boolean(appointment)} /></label></div>
+    <label>Patient *<select name="patient" required defaultValue={patientId || ""} disabled={Boolean(appointment)}><option value="" disabled>Sélectionner un patient</option>{patients.map((patient) => <option key={patient.apiId} value={patient.apiId}>{patient.name}</option>)}</select>{field(errors, "patient")}</label>
+    <label>Type de rendez-vous *<select name="appointment_type" required value={selectedTypeId || ""} disabled={Boolean(appointment)} onChange={(event) => selectType(Number(event.target.value))}>{appointmentTypes.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.default_duration_minutes} min</option>)}</select>{field(errors, "appointment_type")}</label>
+    <label>Personnel principal *<select name="primary_staff" required value={selectedStaffId || ""} disabled={Boolean(appointment) || !matchingStaff.length} onChange={(event) => setSelectedStaffId(Number(event.target.value))}><option value="" disabled>{matchingStaff.length ? "Sélectionner" : "Aucun personnel compatible"}</option>{matchingStaff.map((member) => <option key={member.id} value={member.id}>{staffName(member)} · {member.role}</option>)}</select>{field(errors, "primary_staff")}</label>
+    {!matchingStaff.length && <p className={ui.empty} role="alert">Aucun personnel actif ne correspond au rôle requis par ce type de rendez-vous.</p>}
+    <div className={ui.actions}><label>Date *<input name="date" type="date" required value={selectedDate} disabled={Boolean(appointment)} onChange={(event) => setSelectedDate(event.target.value)} /></label><label>Heure *<input name="time" type="time" required value={selectedTime} disabled={Boolean(appointment)} onChange={(event) => setSelectedTime(event.target.value)} /></label><label>Durée *<input name="duration" type="number" readOnly required value={appointment ? durationMinutes(appointment) : duration} /></label></div>
     <label>Motif<input name="reason" defaultValue={appointment?.reason ?? ""} /></label>{field(errors, "reason")}
     <label>Notes d’accueil<textarea name="notes" defaultValue={appointment?.notes ?? ""} /></label>{field(errors, "notes")}
     <label>Notes internes<textarea name="internal_notes" defaultValue={appointment?.internalNotes ?? ""} /></label>{field(errors, "internal_notes")}
-    {!appointment && <button type="button" className={ui.action} onClick={(event) => void onAvailability(event.currentTarget.form!)}>Voir les créneaux backend</button>}
-    <AvailabilityList slots={availability} />
-    <div className={ui.actions}><button className={`${ui.action} ${ui.primary}`} disabled={busy}>{busy ? "Enregistrement…" : "Enregistrer"}</button><button type="button" className={ui.action} disabled={busy} onClick={onCancel}>Annuler</button></div>
+    {!appointment && <button type="button" className={ui.action} disabled={!canSubmit} onClick={(event) => void onAvailability(event.currentTarget.form!)}>Voir les créneaux backend</button>}
+    <AvailabilityList slots={availability} onSelect={selectSlot} />
+    <div className={ui.actions}><button className={`${ui.action} ${ui.primary}`} disabled={busy || !canSubmit}>{busy ? "Enregistrement…" : "Enregistrer"}</button><button type="button" className={ui.action} disabled={busy} onClick={onCancel}>Annuler</button></div>
   </form>;
 }
 
 function RescheduleForm({ appointment, busy, errors, availability, onCancel, onSubmit, onAvailability }: { appointment: Appointment; busy: boolean; errors: FieldErrors; availability: AvailabilitySlot[]; onCancel: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>; onAvailability: (form: HTMLFormElement) => Promise<void> }) {
+  const [selectedDate, setSelectedDate] = useState(appointment.date);
+  const [selectedTime, setSelectedTime] = useState(appointment.start);
+  function selectSlot(slot: AvailabilitySlot) {
+    setSelectedDate(slot.start_at.slice(0, 10));
+    setSelectedTime(new Date(slot.start_at).toLocaleTimeString("fr-DZ", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Africa/Algiers" }));
+  }
   return <form className={ui.form} onSubmit={onSubmit}>
     <input type="hidden" name="primary_staff" value={appointment.primaryStaffId} /><input type="hidden" name="appointment_type" value={appointment.appointmentTypeId} />
     <p>Le déplacement utilise l’action backend dédiée et conserve l’historique de replanification.</p>
-    <div className={ui.actions}><label>Date *<input name="date" type="date" required defaultValue={appointment.date} /></label><label>Heure *<input name="time" type="time" required defaultValue={appointment.start} /></label><label>Durée *<input name="duration" type="number" min={5} max={480} required defaultValue={durationMinutes(appointment)} /></label></div>
+    <div className={ui.actions}><label>Date *<input name="date" type="date" required value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} /></label><label>Heure *<input name="time" type="time" required value={selectedTime} onChange={(event) => setSelectedTime(event.target.value)} /></label><label>Durée *<input name="duration" type="number" min={5} max={480} required defaultValue={durationMinutes(appointment)} /></label></div>
     <label>Raison du déplacement<textarea name="reason" /></label>{field(errors, "new_start_at")}
     <button type="button" className={ui.action} onClick={(event) => void onAvailability(event.currentTarget.form!)}>Voir les créneaux backend</button>
-    <AvailabilityList slots={availability} />
+    <AvailabilityList slots={availability} onSelect={selectSlot} />
     <div className={ui.actions}><button className={`${ui.action} ${ui.primary}`} disabled={busy}>{busy ? "Déplacement…" : "Déplacer"}</button><button type="button" className={ui.action} disabled={busy} onClick={onCancel}>Annuler</button></div>
   </form>;
 }
 
-function AvailabilityList({ slots }: { slots: AvailabilitySlot[] }) {
+function AvailabilityList({ slots, onSelect }: { slots: AvailabilitySlot[]; onSelect: (slot: AvailabilitySlot) => void }) {
   if (!slots.length) return null;
-  return <div className={ui.panel}><h3>Créneaux disponibles</h3><div className={ui.actions}>{slots.slice(0, 24).map((slot) => <span className={ui.action} key={slot.start_at}>{labelClinicDate(slot.start_at.slice(0, 10), { weekday: "short", day: "numeric", month: "short" })} · {new Date(slot.start_at).toLocaleTimeString("fr-DZ", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Algiers" })}</span>)}</div></div>;
+  return <div className={ui.panel}><h3>Créneaux disponibles</h3><div className={ui.actions}>{slots.slice(0, 24).map((slot) => <button type="button" className={ui.action} key={slot.start_at} onClick={() => onSelect(slot)}>{labelClinicDate(slot.start_at.slice(0, 10), { weekday: "short", day: "numeric", month: "short" })} · {new Date(slot.start_at).toLocaleTimeString("fr-DZ", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Algiers" })}</button>)}</div></div>;
 }

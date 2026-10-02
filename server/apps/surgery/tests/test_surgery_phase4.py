@@ -9,6 +9,7 @@ from apps.care.models import Care, CareCategory, CareType
 from apps.medical.models import Consultation, MedicalInstruction, Prescription
 from apps.patients.models import Patient
 from apps.surgery.models import (
+    InterventionType,
     IntraoperativeEvent,
     PostoperativeFollowUp,
     PreoperativeChecklistItem,
@@ -115,6 +116,150 @@ def create_ready_artifacts(api_client, surgery, doctor_user):
         },
         format="json",
     )
+
+
+@pytest.mark.django_db
+def test_intervention_type_admin_catalog_rbac_snapshot_and_audit(
+    api_client,
+    admin_user,
+    doctor_user,
+    nurse_user,
+    secretary_user,
+    patient,
+    consultation,
+):
+    api_client.force_authenticate(user=admin_user)
+    created = api_client.post(
+        "/api/v1/intervention-types/",
+        {
+            "name": "Rhinoplastie catalog",
+            "code": "RHINO-CAT",
+            "description": "Configured rhinoplasty",
+            "is_active": True,
+        },
+        format="json",
+    )
+    assert created.status_code == status.HTTP_201_CREATED, created.data
+    intervention_type_id = created.data["id"]
+    assert AuditLog.objects.filter(
+        action="INTERVENTION_TYPE_CREATED",
+        entity_id=str(intervention_type_id),
+    ).exists()
+
+    updated = api_client.patch(
+        f"/api/v1/intervention-types/{intervention_type_id}/",
+        {"description": "Updated configured rhinoplasty"},
+        format="json",
+    )
+    assert updated.status_code == status.HTTP_200_OK
+
+    api_client.force_authenticate(user=doctor_user)
+    doctor_read = api_client.get("/api/v1/intervention-types/?is_active=true")
+    doctor_write = api_client.patch(
+        f"/api/v1/intervention-types/{intervention_type_id}/",
+        {"name": "Doctor managed"},
+        format="json",
+    )
+    assert doctor_read.status_code == status.HTTP_200_OK
+    assert doctor_read.data["results"][0]["name"] == "Rhinoplastie catalog"
+    assert doctor_write.status_code == status.HTTP_403_FORBIDDEN
+
+    for role_user in (nurse_user, secretary_user):
+        api_client.force_authenticate(user=role_user)
+        response = api_client.get("/api/v1/intervention-types/")
+        forbidden = api_client.post(
+            "/api/v1/intervention-types/",
+            {"name": f"Blocked {role_user.role}", "code": f"BLOCK-{role_user.role}"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert forbidden.status_code == status.HTTP_403_FORBIDDEN
+
+    api_client.force_authenticate(user=doctor_user)
+    surgery = api_client.post(
+        "/api/v1/surgeries/",
+        {
+            "patient": patient.id,
+            "consultation": consultation.id,
+            "intervention_type": intervention_type_id,
+            "procedure_name": "Contradictory frontend value",
+            "procedure_code": "WRONG",
+            "indication": "Catalog-backed surgery",
+            "planned_date": (timezone.now() + timedelta(days=7)).isoformat(),
+            "priority": "NORMAL",
+            "laterality": "NOT_APPLICABLE",
+            "anatomical_site": "Nose",
+            "anesthesia_type": "GENERAL",
+        },
+        format="json",
+    )
+    assert surgery.status_code == status.HTTP_201_CREATED, surgery.data
+    assert surgery.data["intervention_type"] == intervention_type_id
+    assert surgery.data["intervention_type_name"] == "Rhinoplastie catalog"
+    assert surgery.data["procedure_name"] == "Rhinoplastie catalog"
+    assert surgery.data["procedure_code"] == "RHINO-CAT"
+
+    legacy = Surgery.objects.create(
+        patient=patient,
+        consultation=consultation,
+        surgeon=doctor_user,
+        procedure_name="Legacy free text",
+        procedure_code="LEGACY",
+        indication="Historical surgery",
+    )
+    legacy_read = api_client.get(f"/api/v1/surgeries/{legacy.id}/")
+    assert legacy_read.status_code == status.HTTP_200_OK
+    assert legacy_read.data["intervention_type"] is None
+    assert legacy_read.data["procedure_name"] == "Legacy free text"
+
+    api_client.force_authenticate(user=admin_user)
+    deactivated = api_client.patch(
+        f"/api/v1/intervention-types/{intervention_type_id}/",
+        {"is_active": False},
+        format="json",
+    )
+    assert deactivated.status_code == status.HTTP_200_OK
+
+    api_client.force_authenticate(user=doctor_user)
+    inactive_create = api_client.post(
+        "/api/v1/surgeries/",
+        {
+            "patient": patient.id,
+            "intervention_type": intervention_type_id,
+            "indication": "Inactive catalog should fail",
+        },
+        format="json",
+    )
+    historical_read = api_client.get(f"/api/v1/surgeries/{surgery.data['id']}/")
+    assert inactive_create.status_code == status.HTTP_400_BAD_REQUEST
+    assert historical_read.status_code == status.HTTP_200_OK
+    assert historical_read.data["intervention_type_name"] == "Rhinoplastie catalog"
+
+
+@pytest.mark.django_db
+def test_completed_surgery_intervention_identity_cannot_change(api_client, doctor_user, patient, consultation):
+    old_type = InterventionType.objects.create(name="Blepharoplastie", code="BLEPH", is_active=True)
+    new_type = InterventionType.objects.create(name="Abdominoplastie", code="ABDO", is_active=True)
+    surgery = Surgery.objects.create(
+        patient=patient,
+        consultation=consultation,
+        surgeon=doctor_user,
+        intervention_type=old_type,
+        procedure_name=old_type.name,
+        procedure_code=old_type.code,
+        indication="Completed surgery",
+        status=Surgery.Status.COMPLETED,
+    )
+    api_client.force_authenticate(user=doctor_user)
+    response = api_client.patch(
+        f"/api/v1/surgeries/{surgery.id}/",
+        {"intervention_type": new_type.id},
+        format="json",
+    )
+    surgery.refresh_from_db()
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert surgery.intervention_type == old_type
+    assert surgery.procedure_name == old_type.name
 
 
 @pytest.mark.django_db
@@ -483,3 +628,49 @@ def test_surgery_filtering_search_and_ordering(api_client, doctor_user, surgery)
     assert listing.status_code == status.HTTP_200_OK
     assert listing.data["count"] == 1
     assert listing.data["results"][0]["id"] == surgery.id
+
+
+@pytest.mark.django_db
+def test_admin_can_manage_preoperative_checklist_configuration(api_client, admin_user, doctor_user, nurse_user):
+    api_client.force_authenticate(user=admin_user)
+    created = api_client.post(
+        "/api/v1/preoperative-checklist-items/",
+        {
+            "name": "Phase 9K checklist item",
+            "description": "Configuration item managed by admin",
+            "category": "Administrative readiness",
+            "is_required": True,
+            "is_active": True,
+            "sort_order": 50,
+        },
+        format="json",
+    )
+
+    assert created.status_code == status.HTTP_201_CREATED
+    item_id = created.data["id"]
+    assert AuditLog.objects.filter(action="PREOP_CHECKLIST_ITEM_CREATED", entity_id=str(item_id)).exists()
+
+    updated = api_client.patch(
+        f"/api/v1/preoperative-checklist-items/{item_id}/",
+        {"is_active": False},
+        format="json",
+    )
+    assert updated.status_code == status.HTTP_200_OK
+    assert updated.data["is_active"] is False
+
+    api_client.force_authenticate(user=doctor_user)
+    doctor_update = api_client.patch(
+        f"/api/v1/preoperative-checklist-items/{item_id}/",
+        {"is_active": True},
+        format="json",
+    )
+    assert doctor_update.status_code == status.HTTP_200_OK
+
+    api_client.force_authenticate(user=nurse_user)
+    nurse_update = api_client.patch(
+        f"/api/v1/preoperative-checklist-items/{item_id}/",
+        {"is_active": False},
+        format="json",
+    )
+    assert nurse_update.status_code == status.HTTP_403_FORBIDDEN
+    assert PreoperativeChecklistItem.objects.get(pk=item_id).is_active is True

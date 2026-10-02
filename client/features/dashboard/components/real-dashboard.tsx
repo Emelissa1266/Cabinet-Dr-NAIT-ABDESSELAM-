@@ -15,7 +15,7 @@ function AppointmentList({ items }: { items: DashboardAppointmentPreview[] }) {
     <ul className={workspace.list}>
       {items.map((item) => (
         <li key={item.id}>
-          <strong>Patient {item.patient_reference}</strong>
+          <strong>Rendez-vous planifié</strong>
           <small>{dateTime(item.start_at)}</small>
           <StatusBadge tone="neutral">{item.status}</StatusBadge>
           <Link className={workspace.link} href="/agenda">Agenda</Link>
@@ -32,7 +32,7 @@ function SurgeryList({ items }: { items: DashboardSurgeryPreview[] }) {
       {items.map((item) => (
         <li key={item.id}>
           <strong>{item.procedure_name}</strong>
-          <small>Patient {item.patient_reference} · {dateTime(item.planned_date)}</small>
+          <small>{dateTime(item.planned_date)}</small>
           <StatusBadge tone="teal">{item.status}</StatusBadge>
           <Link className={workspace.link} href="/interventions">Interventions</Link>
         </li>
@@ -47,7 +47,7 @@ function CareSessionList({ items }: { items: DashboardCareSessionPreview[] }) {
     <ul className={workspace.list}>
       {items.map((item) => (
         <li key={item.id}>
-          <strong>Patient {item.patient_reference}</strong>
+          <strong>Séance de soin</strong>
           <small>{dateTime(item.scheduled_at)}</small>
           <StatusBadge tone="neutral">{item.status}</StatusBadge>
           <Link className={workspace.link} href={`/nurse/care?session=${item.id}`}>Ouvrir le soin</Link>

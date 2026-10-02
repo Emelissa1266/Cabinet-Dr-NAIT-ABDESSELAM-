@@ -19,7 +19,7 @@ export function LoginForm() {
   const [help, setHelp] = useState(false);
   useEffect(() => {
     if (!ready || !user) return;
-    router.replace(user.role === "NURSE" ? "/nurse/dashboard" : user.role === "SECRETARY" ? "/secretary/dashboard" : "/dashboard");
+    router.replace(user.role === "ADMIN" ? "/admin" : user.role === "NURSE" ? "/nurse/dashboard" : user.role === "SECRETARY" ? "/secretary/dashboard" : "/dashboard");
   }, [ready, user, router]);
   const canSubmit = username.trim().length > 0 && password.length > 0;
   async function submit(event: FormEvent<HTMLFormElement>) {

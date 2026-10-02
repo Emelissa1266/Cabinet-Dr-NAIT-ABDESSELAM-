@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DetailDialog } from "@/components/ui/detail-dialog";
 import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
+import { useAuth } from "@/features/auth/components/auth-provider";
 import { listConsultations } from "@/features/medical/services/consultation-service";
 import { medicalErrorMessage } from "@/features/medical/services/medical-errors";
 import type { Consultation } from "@/features/medical/types";
@@ -34,6 +35,7 @@ function formatDateTime(value: string) {
 }
 
 export function PrescriptionWorkspace() {
+  const { user } = useAuth();
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [consultations, setConsultations] = useState<Consultation[]>([]);
@@ -48,7 +50,8 @@ export function PrescriptionWorkspace() {
 
   const patientByApiId = useMemo(() => new Map(patients.map((patient) => [patient.apiId, patient])), [patients]);
   const consultationById = useMemo(() => new Map(consultations.map((consultation) => [consultation.id, consultation])), [consultations]);
-  const patientName = useCallback((id: number) => patientByApiId.get(id)?.name ?? `Patient #${id}`, [patientByApiId]);
+  const patientName = useCallback((id: number) => patientByApiId.get(id)?.name ?? "Patient", [patientByApiId]);
+  const patientPath = useCallback((id: number) => patientByApiId.get(id)?.patientReference ?? "", [patientByApiId]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -135,10 +138,10 @@ export function PrescriptionWorkspace() {
           <tbody>
             {filtered.map((prescription) => (
               <tr key={prescription.id}>
-                <td>{formatDateTime(prescription.prescribed_at)}<span className={styles.small}>#{prescription.id}</span></td>
+                <td>{formatDateTime(prescription.prescribed_at)}</td>
                 <td><strong>{patientName(prescription.patient)}</strong></td>
                 <td>{prescription.items.length} médicament(s)<span className={styles.small}>{prescription.items[0]?.medication_name ?? prescription.general_instructions}</span></td>
-                <td>{prescription.consultation ? consultationById.get(prescription.consultation)?.reason ?? `#${prescription.consultation}` : "Non liée"}</td>
+                <td>{prescription.consultation ? consultationById.get(prescription.consultation)?.reason ?? "Consultation liée" : "Non liée"}</td>
                 <td><StatusBadge tone={statusTones[prescription.status]}>{statusLabels[prescription.status]}</StatusBadge></td>
                 <td><button className={styles.link} onClick={() => setSelected(prescription)} aria-label={`Voir l’ordonnance ${prescription.id}`}>Consulter</button></td>
               </tr>
@@ -154,7 +157,7 @@ export function PrescriptionWorkspace() {
         {selected && (
           <>
             <h3>{patientName(selected.patient)}</h3>
-            <p>{formatDateTime(selected.prescribed_at)} · Praticien #{selected.doctor}</p>
+            <p>{formatDateTime(selected.prescribed_at)} · {user?.displayName || user?.username || "Praticien"}</p>
             <StatusBadge tone={statusTones[selected.status]}>{statusLabels[selected.status]}</StatusBadge>
             <section className={styles.section}>
               <h3>Prescription</h3>
@@ -175,7 +178,9 @@ export function PrescriptionWorkspace() {
               <p>{selected.general_instructions || selected.notes || "Aucune instruction complémentaire."}</p>
             </section>
             <div className={ui.actions}>
-              <Link className={ui.action} href={`/patients/${selected.patient}`}>Dossier patient</Link>
+              {patientPath(selected.patient)
+                ? <Link className={ui.action} href={`/patients/${patientPath(selected.patient)}`}>Dossier patient</Link>
+                : <button className={ui.action} disabled>Dossier patient</button>}
               <button className={ui.action} onClick={() => setEditing(selected)}>Modifier</button>
               <button className={ui.action} disabled title="Impression disponible lors d’une prochaine intégration">Imprimer</button>
               <button className={ui.action} disabled title="La génération de PDF n’est pas encore activée">Exporter PDF</button>

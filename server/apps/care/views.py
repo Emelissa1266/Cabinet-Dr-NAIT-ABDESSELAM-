@@ -75,7 +75,7 @@ class AuditCreateUpdateMixin:
         )
 
 
-class CareCategoryViewSet(viewsets.ModelViewSet):
+class CareCategoryViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
     queryset = CareCategory.objects.all()
     serializer_class = CareCategorySerializer
     permission_classes = [CareCatalogPermission]
@@ -84,9 +84,12 @@ class CareCategoryViewSet(viewsets.ModelViewSet):
     search_fields = ("name", "description")
     ordering_fields = ("name", "created_at")
     ordering = ("name",)
+    audit_entity_type = "CareCategory"
+    audit_create_action = "CARE_CATEGORY_CREATED"
+    audit_update_action = "CARE_CATEGORY_UPDATED"
 
 
-class CareTypeViewSet(viewsets.ModelViewSet):
+class CareTypeViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
     queryset = CareType.objects.select_related("category").all()
     serializer_class = CareTypeSerializer
     permission_classes = [CareCatalogPermission]
@@ -95,6 +98,9 @@ class CareTypeViewSet(viewsets.ModelViewSet):
     search_fields = ("name", "description", "category__name")
     ordering_fields = ("name", "created_at", "default_price")
     ordering = ("category__name", "name")
+    audit_entity_type = "CareType"
+    audit_create_action = "CARE_TYPE_CREATED"
+    audit_update_action = "CARE_TYPE_UPDATED"
 
 
 class CareViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
@@ -243,7 +249,7 @@ class CareSessionMaterialViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
     audit_update_action = "CARE_MATERIAL_UPDATED"
 
 
-class CareParameterDefinitionViewSet(viewsets.ModelViewSet):
+class CareParameterDefinitionViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
     queryset = CareParameterDefinition.objects.select_related("care_type").all()
     serializer_class = CareParameterDefinitionSerializer
     permission_classes = [CareCatalogPermission]
@@ -252,6 +258,9 @@ class CareParameterDefinitionViewSet(viewsets.ModelViewSet):
     search_fields = ("key", "label")
     ordering_fields = ("key", "created_at")
     ordering = ("care_type__name", "key")
+    audit_entity_type = "CareParameterDefinition"
+    audit_create_action = "CARE_PARAMETER_DEFINITION_CREATED"
+    audit_update_action = "CARE_PARAMETER_DEFINITION_UPDATED"
 
 
 class CareSessionParameterViewSet(viewsets.ModelViewSet):

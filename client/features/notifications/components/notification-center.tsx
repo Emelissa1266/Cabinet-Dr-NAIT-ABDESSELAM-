@@ -139,7 +139,7 @@ export function NotificationCenter({ onUnreadChange }: { onUnreadChange?: (count
               <small>{notification.message}</small>
               {notification.patient && (
                 <Link className={workspace.link} href={patientHref(user?.role, notification.patient)}>
-                  Patient {notification.patient_reference || `#${notification.patient}`}
+                  Dossier patient
                 </Link>
               )}
               <div className={ui.actions}>

@@ -43,7 +43,7 @@ export function mapPatient(patient: BackendPatient): Patient {
     patientReference: patient.patient_reference,
     firstName: patient.first_name,
     lastName: patient.last_name,
-    name: name || patient.patient_reference,
+    name: name || "Patient",
     initials: initials(patient.first_name, patient.last_name),
     age: calculateAge(patient.date_of_birth),
     dateOfBirth: patient.date_of_birth,

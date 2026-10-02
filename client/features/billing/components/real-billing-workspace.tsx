@@ -43,11 +43,11 @@ const invoiceStatuses: Array<InvoiceStatus | ""> = ["", "DRAFT", "ISSUED", "PART
 const paymentMethods = Object.keys(paymentMethodLabels) as PaymentMethod[];
 
 function patientLabel(patient: Patient) {
-  return `${patient.name} · ${patient.patientReference}`;
+  return patient.name;
 }
 
 function invoiceLabel(invoice: InvoiceApi) {
-  return invoice.invoice_number ?? `Brouillon #${invoice.id}`;
+  return invoice.invoice_number ?? "Brouillon non émis";
 }
 
 function RealInvoiceForm({
@@ -357,7 +357,7 @@ export function RealBillingWorkspace({ initialPatientId, initialInvoiceId, creat
                 {invoices.map((invoice) => (
                   <tr key={invoice.id} onClick={() => setSelectedId(invoice.id)} aria-selected={invoice.id === selected?.id}>
                     <td><strong>{invoiceLabel(invoice)}</strong><small>{dateOnly(invoice.issue_date)} · échéance {dateOnly(invoice.due_date)}</small></td>
-                    <td>{invoice.patient_name}<small>{invoice.patient_reference}</small></td>
+                    <td>{invoice.patient_name}<small>{dateOnly(invoice.issue_date)}</small></td>
                     <td>{money(invoice.total, invoice.currency)}</td>
                     <td>{money(invoice.paid_amount, invoice.currency)}</td>
                     <td>{money(invoice.remaining_amount, invoice.currency)}</td>
@@ -372,10 +372,10 @@ export function RealBillingWorkspace({ initialPatientId, initialInvoiceId, creat
           {selected && <aside className={ui.panel}>
             <div className={ui.actions}><p className={ui.eyebrow}>Détail facture</p><StatusBadge tone={invoiceTone(selected.status)}>{invoiceStatusLabels[selected.status]}</StatusBadge></div>
             <h2>{invoiceLabel(selected)}</h2>
-            <p>{selected.patient_name} · {selected.patient_reference}</p>
+            <p>{selected.patient_name}</p>
             <dl><dt>Total</dt><dd>{money(selected.total, selected.currency)}</dd><dt>Payé</dt><dd>{money(selected.paid_amount, selected.currency)}</dd><dt>Solde</dt><dd>{money(selected.remaining_amount, selected.currency)}</dd></dl>
             <div className={ui.actions}>
-              <Link className={ui.action} href={`/patients/${selected.patient}`}>Dossier patient</Link>
+              <Link className={ui.action} href={`/patients/${selected.patient_reference}`}>Dossier patient</Link>
               {canWrite && selected.status === "DRAFT" && <button className={ui.action} disabled={busy} onClick={() => run(() => issueInvoice(selected.id), "Facture émise.")}>Émettre</button>}
               {canWrite && !["PAID", "CANCELLED"].includes(selected.status) && selected.status !== "DRAFT" && <button className={`${ui.action} ${ui.primary}`} disabled={busy || selected.remaining_amount === "0.00"} onClick={() => setMessage("")}>Paiement ci-dessous</button>}
               {canWrite && ["DRAFT", "ISSUED"].includes(selected.status) && <button className={ui.action} disabled={busy} onClick={() => { const reason = window.prompt("Motif d’annulation"); if (reason) void run(() => cancelInvoice(selected.id, reason), "Facture annulée."); }}>Annuler</button>}

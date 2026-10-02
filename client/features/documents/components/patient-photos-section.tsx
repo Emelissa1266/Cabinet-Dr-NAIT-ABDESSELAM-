@@ -51,6 +51,14 @@ export function PatientPhotosSection({ patient }: { patient: Patient }) {
   const [error, setError] = useState("");
   const canWrite = user?.role === "DOCTOR" || user?.role === "NURSE";
   const selected = photos.find((photo) => photo.id === selectedId) ?? photos[0] ?? null;
+  const photoLabel = useCallback(
+    (photoId: number) => {
+      const photo = photos.find((item) => item.id === photoId);
+      if (!photo) return "Cliché archivé";
+      return `${photoTypeLabels[photo.photo_type]} · ${photo.anatomical_area} · ${dateTime(photo.captured_at || photo.created_at)}`;
+    },
+    [photos],
+  );
 
   const filtered = useMemo(
     () => photos.filter((photo) => !filter || photo.photo_type === filter),
@@ -319,7 +327,7 @@ export function PatientPhotosSection({ patient }: { patient: Patient }) {
               <ul className={workspace.list}>
                 {comparisons.map((comparison) => (
                   <li key={comparison.id}>
-                    <strong>#{comparison.before_photo} → #{comparison.after_photo}</strong>
+                    <strong>{photoLabel(comparison.before_photo)} → {photoLabel(comparison.after_photo)}</strong>
                     <small>{dateTime(comparison.created_at)} · {comparison.notes || "Sans note"}</small>
                   </li>
                 ))}

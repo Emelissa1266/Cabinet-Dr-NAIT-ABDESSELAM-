@@ -8,6 +8,12 @@
 .primary { background: var(--primary); color: white; }
 .action:disabled { opacity: .55; }
 .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+.adminGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.adminCard { display: flex; flex-direction: column; gap: 12px; min-height: 154px; padding: 22px; background: var(--surface); border: 1px solid transparent; border-radius: 8px; box-shadow: var(--shadow-sm); color: inherit; outline: none; text-decoration: none; }
+.adminCard:hover, .adminCard:focus-visible { border-color: var(--secondary); transform: translateY(-1px); }
+.adminCardIcon { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 8px; background: var(--workspace); color: var(--primary); }
+.adminCard h2 { margin: 2px 0 0; font-size: 16px; font-weight: 600; line-height: 22px; }
+.adminCard p { margin: 0; color: var(--muted); font-size: 13px; line-height: 20px; }
 .search { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--surface); border: 1px solid transparent; border-radius: 6px; min-width: 250px; width: min(100%, 405px); box-shadow: var(--shadow-sm); }
 .search input { min-width: 0; width: 100%; background: transparent; outline: none; font-size: 12px; }
 .search:focus-within { border-color: var(--secondary); }
@@ -33,5 +39,5 @@
 .form label { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: 12px; }
 .form input, .form select, .form textarea { width: 100%; border: 1px solid var(--border); background: var(--workspace); color: var(--text); padding: 10px 12px; border-radius: 4px; font: inherit; font-size: 13px; }
 .form textarea { min-height: 90px; resize: vertical; }
-@media (max-width: 1100px) { .toolbar { align-items: stretch; flex-direction: column; gap: 14px; } .heading { flex-wrap: wrap; } }
-@media (max-width: 600px) { .title { font-size: 26px; } .search { min-width: 0; width: 100%; } .panel { padding: 18px; } .action { min-height: 42px; } }
+@media (max-width: 1100px) { .toolbar { align-items: stretch; flex-direction: column; gap: 14px; } .heading { flex-wrap: wrap; } .adminGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .title { font-size: 26px; } .search { min-width: 0; width: 100%; } .panel { padding: 18px; } .action { min-height: 42px; } .adminGrid { grid-template-columns: 1fr; } }

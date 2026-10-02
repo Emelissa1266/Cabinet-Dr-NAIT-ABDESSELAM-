@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from .models import (
     AnesthesiaRecord,
+    InterventionType,
     IntraoperativeEvent,
     PostoperativeAssessment,
     PostoperativeFollowUp,
@@ -17,11 +18,27 @@ from .models import (
 )
 
 
+@admin.register(InterventionType)
+class InterventionTypeAdmin(admin.ModelAdmin):
+    list_display = ("name", "code", "is_active", "created_at")
+    list_filter = ("is_active",)
+    search_fields = ("name", "code", "description")
+    ordering = ("name",)
+
+
 @admin.register(Surgery)
 class SurgeryAdmin(admin.ModelAdmin):
-    list_display = ("id", "patient", "procedure_name", "surgeon", "status", "planned_date", "actual_start_at")
-    list_filter = ("status", "priority", "surgeon", "planned_date")
-    search_fields = ("patient__patient_reference", "patient__first_name", "patient__last_name", "procedure_name")
+    list_display = ("id", "patient", "intervention_type", "procedure_name", "surgeon", "status", "planned_date", "actual_start_at")
+    list_filter = ("status", "priority", "surgeon", "intervention_type", "planned_date")
+    search_fields = (
+        "patient__patient_reference",
+        "patient__first_name",
+        "patient__last_name",
+        "procedure_name",
+        "procedure_code",
+        "intervention_type__name",
+        "intervention_type__code",
+    )
     ordering = ("-planned_date", "-created_at")
 
 

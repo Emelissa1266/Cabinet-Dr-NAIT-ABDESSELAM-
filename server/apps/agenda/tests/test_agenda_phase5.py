@@ -543,6 +543,7 @@ def test_rbac_secretary_operational_admin_config_and_doctor_nurse_read(
     nurse_read = api_client.get(f"/api/v1/appointments/{appointment.id}/")
     assert forbidden_config.status_code == status.HTTP_403_FORBIDDEN
     assert config.status_code == status.HTTP_201_CREATED
+    assert AuditLog.objects.filter(action="APPOINTMENT_TYPE_CREATED", entity_id=str(config.data["id"])).exists()
     assert doctor_read.status_code == status.HTTP_200_OK
     assert nurse_read.status_code == status.HTTP_200_OK
 

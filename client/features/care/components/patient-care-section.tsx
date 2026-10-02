@@ -76,7 +76,7 @@ export function PatientCareSection({ patient }: { patient: Patient }) {
                 const type = careType(care, careTypes);
                 return (
                   <tr key={care.id}>
-                    <td><strong>{careTypeName(type)}</strong><small>#{care.id} · début {dateOnly(care.start_date)}</small></td>
+                    <td><strong>{careTypeName(type)}</strong><small>{patient.name} · début {dateOnly(care.start_date)}</small></td>
                     <td><StatusBadge tone={care.status === "COMPLETED" ? "success" : care.status === "IN_PROGRESS" ? "teal" : "neutral"}>{careStatusLabels[care.status]}</StatusBadge></td>
                     <td>{care.completed_sessions}/{care.planned_sessions}<small>{care.remaining_sessions} restantes · {care.progress_percentage}%</small></td>
                     <td>{decimalAmount(care.total_price)}<small>{decimalAmount(care.price_per_session)} / séance</small></td>
@@ -89,12 +89,13 @@ export function PatientCareSection({ patient }: { patient: Patient }) {
       )}
       {cares.map((care) => {
         const sessions = sessionsByCare[care.id] ?? [];
+        const type = careType(care, careTypes);
         if (!sessions.length) return null;
         return (
           <div key={`sessions-${care.id}`}>
-            <h3>Séances du soin #{care.id}</h3>
+            <h3>Séances - {careTypeName(type)}</h3>
             <ul>
-              {sessions.map((session) => <li key={session.id}>#{session.id} · {careSessionTime(session)} · {sessionStatusLabels[session.status]}{session.notes ? ` · ${session.notes}` : ""}</li>)}
+              {sessions.map((session, index) => <li key={session.id}>Séance {index + 1} · {careSessionTime(session)} · {sessionStatusLabels[session.status]}{session.notes ? ` · ${session.notes}` : ""}</li>)}
             </ul>
           </div>
         );

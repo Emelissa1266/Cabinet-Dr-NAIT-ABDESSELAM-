@@ -81,7 +81,7 @@ export function PhotoLibrary({ initialPatientId }: { initialPatientId?: string }
             <select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}>
               <option value="">Sélectionner un patient</option>
               {patients.map((patient) => (
-                <option key={patient.apiId} value={patient.apiId}>{patient.name} · {patient.patientReference}</option>
+                <option key={patient.apiId} value={patient.apiId}>{patient.name}</option>
               ))}
             </select>
           </label>

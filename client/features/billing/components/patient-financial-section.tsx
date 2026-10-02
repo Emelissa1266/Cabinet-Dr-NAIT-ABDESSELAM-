@@ -62,7 +62,7 @@ export function PatientFinancialSection({ patient }: { patient: Patient }) {
         <dt>Factures impayées / partielles</dt><dd>{summary.unpaid_invoices_count} / {summary.partially_paid_invoices_count}</dd>
       </dl>}
       <h3>Factures</h3>
-      {invoices.length ? <div className={ui.tableScroll}><table className={ui.table}><thead><tr><th>Facture</th><th>Total</th><th>Solde</th><th>Statut</th></tr></thead><tbody>{invoices.map((invoice) => <tr key={invoice.id}><td>{invoice.invoice_number ?? `Brouillon #${invoice.id}`}<small>{dateOnly(invoice.issue_date)}</small></td><td>{money(invoice.total, invoice.currency)}</td><td>{money(invoice.remaining_amount, invoice.currency)}</td><td><StatusBadge tone={invoiceTone(invoice.status)}>{invoiceStatusLabels[invoice.status]}</StatusBadge></td></tr>)}</tbody></table></div> : <p>Aucune facture.</p>}
+      {invoices.length ? <div className={ui.tableScroll}><table className={ui.table}><thead><tr><th>Facture</th><th>Total</th><th>Solde</th><th>Statut</th></tr></thead><tbody>{invoices.map((invoice) => <tr key={invoice.id}><td>{invoice.invoice_number ?? "Brouillon non émis"}<small>{dateOnly(invoice.issue_date)}</small></td><td>{money(invoice.total, invoice.currency)}</td><td>{money(invoice.remaining_amount, invoice.currency)}</td><td><StatusBadge tone={invoiceTone(invoice.status)}>{invoiceStatusLabels[invoice.status]}</StatusBadge></td></tr>)}</tbody></table></div> : <p>Aucune facture.</p>}
       <h3>Règlements</h3>
       {payments.length ? <ul>{payments.map((payment) => <li key={payment.id}>{payment.payment_number} · {paymentStatusLabels[payment.status]} · {money(payment.amount, payment.currency)} · {paymentMethodLabels[payment.payment_method]}</li>)}</ul> : <p>Aucun règlement.</p>}
     </section>

@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     AnesthesiaRecordViewSet,
+    InterventionTypeViewSet,
     IntraoperativeEventViewSet,
     PostoperativeAssessmentViewSet,
     PostoperativeFollowUpViewSet,
@@ -18,6 +19,7 @@ from .views import (
 )
 
 router = DefaultRouter()
+router.register("intervention-types", InterventionTypeViewSet, basename="intervention-type")
 router.register("surgeries", SurgeryViewSet, basename="surgery")
 router.register("preoperative-assessments", PreoperativeAssessmentViewSet, basename="preoperative-assessment")
 router.register("preoperative-checklist-items", PreoperativeChecklistItemViewSet, basename="preoperative-checklist-item")

@@ -293,7 +293,7 @@ export function RealNurseCare({ initialSession }: { initialSession?: string }) {
                     <button key={session.id} className={styles.sessionCard} data-active={session.id === selected?.id} onClick={() => setSelectedId(session.id)}>
                       <strong>{patientName(patient)}</strong>
                       <span>{careTypeName(type)}</span>
-                      <small>#{session.id} · {careSessionTime(session)}</small>
+                      <small>{careSessionTime(session)}</small>
                       <StatusBadge tone={session.status === "COMPLETED" ? "success" : session.status === "IN_PROGRESS" ? "teal" : "neutral"}>{sessionStatusLabels[session.status]}</StatusBadge>
                     </button>
                   );
@@ -305,7 +305,7 @@ export function RealNurseCare({ initialSession }: { initialSession?: string }) {
             <section className={`${styles.panel} ${styles.execution}`} aria-label="Fiche d’exécution réelle">
               <div className={styles.sectionHeading}>
                 <div>
-                  <p className={styles.eyebrow}>Séance #{selected.id}</p>
+                  <p className={styles.eyebrow}>Séance de soin</p>
                   <h2>{careTypeName(selectedCareType)}</h2>
                 </div>
                 <StatusBadge tone={selected.status === "COMPLETED" ? "success" : selected.status === "IN_PROGRESS" ? "teal" : "neutral"}>{sessionStatusLabels[selected.status]}</StatusBadge>
@@ -314,8 +314,8 @@ export function RealNurseCare({ initialSession }: { initialSession?: string }) {
                 <span>{selectedPatient?.initials ?? "P"}</span>
                 <div>
                   <strong>{patientName(selectedPatient)}</strong>
-                  <p>{selectedPatient?.patientReference ?? `Patient #${selectedCare.patient}`} · {dateOnly(selectedCare.start_date)}</p>
-                  <p>Plan #{selectedCare.id} · {careStatusLabels[selectedCare.status]} · {decimalAmount(selectedCare.total_price)}</p>
+                  <p>{dateOnly(selectedCare.start_date)}</p>
+                  <p>{careStatusLabels[selectedCare.status]} · {decimalAmount(selectedCare.total_price)}</p>
                 </div>
               </div>
               <div className={styles.inset}>
@@ -331,7 +331,7 @@ export function RealNurseCare({ initialSession }: { initialSession?: string }) {
               <div className={styles.actions}>
                 {selected.status === "PLANNED" && <button className={styles.primary} disabled={busy} onClick={() => runMutation(() => startCareSession(selected.id), "Séance démarrée.")}>Commencer</button>}
                 {selected.status === "IN_PROGRESS" && <button className={styles.primary} disabled={busy} onClick={() => runMutation(() => completeCareSession(selected.id), "Séance terminée.")}>Terminer</button>}
-                {selectedPatient && <Link href={`/nurse/patients/${selectedPatient.id}`}>Dossier patient</Link>}
+                {selectedPatient && <Link href={`/nurse/patients/${selectedPatient.patientReference}`}>Dossier patient</Link>}
               </div>
               <section>
                 <h3>Paramètres dynamiques</h3>

@@ -17,11 +17,24 @@ export type IntraoperativeEventType = "MEDICATION" | "COMPLICATION" | "OBSERVATI
 export type IntraoperativeSeverity = "LOW" | "MODERATE" | "HIGH" | "CRITICAL" | "";
 export type SurgeryComplicationSeverity = "MINOR" | "MODERATE" | "SEVERE" | "CRITICAL";
 
+export interface InterventionTypeApi {
+  id: number;
+  name: string;
+  code: string;
+  description: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface SurgeryApi {
   id: number;
   patient: number;
   consultation: number | null;
   surgeon: number;
+  intervention_type: number | null;
+  intervention_type_name: string | null;
+  intervention_type_code: string | null;
   procedure_name: string;
   procedure_code: string;
   procedure_description: string;
@@ -229,12 +242,14 @@ export interface SurgeryListParams {
   planned_date__date?: string;
   planned_date__gte?: string;
   planned_date__lte?: string;
+  intervention_type?: number | string;
 }
 
 export interface SurgeryPayload {
   patient: number;
   consultation?: number | null;
-  procedure_name: string;
+  intervention_type?: number | null;
+  procedure_name?: string;
   procedure_code?: string;
   procedure_description?: string;
   indication: string;

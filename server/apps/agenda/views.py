@@ -84,7 +84,7 @@ class AuditMixin:
         )
 
 
-class AppointmentTypeViewSet(viewsets.ModelViewSet):
+class AppointmentTypeViewSet(AuditMixin, viewsets.ModelViewSet):
     queryset = AppointmentType.objects.all()
     serializer_class = AppointmentTypeSerializer
     permission_classes = [AgendaConfigPermission]
@@ -93,6 +93,9 @@ class AppointmentTypeViewSet(viewsets.ModelViewSet):
     search_fields = ("name", "code", "description")
     ordering_fields = ("name", "created_at")
     ordering = ("name",)
+    audit_entity_type = "AppointmentType"
+    audit_create_action = "APPOINTMENT_TYPE_CREATED"
+    audit_update_action = "APPOINTMENT_TYPE_UPDATED"
 
 
 class AgendaStaffView(APIView):

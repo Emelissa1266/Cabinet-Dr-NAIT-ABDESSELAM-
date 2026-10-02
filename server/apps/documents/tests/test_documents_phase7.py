@@ -339,6 +339,10 @@ def test_rbac_doctor_nurse_secretary_and_admin(
     assert secretary_allowed.status_code == status.HTTP_200_OK
     assert secretary_denied.status_code == status.HTTP_404_NOT_FOUND
     assert category_create.status_code == status.HTTP_201_CREATED
+    assert AuditLog.objects.filter(
+        action="DOCUMENT_CATEGORY_CREATED",
+        entity_id=str(category_create.data["id"]),
+    ).exists()
     unrelated.refresh_from_db()
     assert unrelated.is_archived is False
 

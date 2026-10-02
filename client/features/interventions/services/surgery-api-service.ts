@@ -3,6 +3,7 @@ import { queryString } from "@/features/medical/services/query";
 import type {
   AnesthesiaRecordApi,
   AnesthesiaRecordPayload,
+  InterventionTypeApi,
   IntraoperativeEventApi,
   IntraoperativeEventPayload,
   PaginatedResponse,
@@ -31,6 +32,10 @@ import type {
   SurgeryTeamMemberPayload,
   UpdateSurgeryPayload,
 } from "../api-types";
+
+export function listInterventionTypes(params: Record<string, string | number | boolean | undefined | null> = {}) {
+  return apiRequest<PaginatedResponse<InterventionTypeApi>>(`intervention-types/${queryString(params)}`);
+}
 
 export function listSurgeries(params: SurgeryListParams = {}) {
   return apiRequest<PaginatedResponse<SurgeryApi>>(`surgeries/${queryString(params)}`);

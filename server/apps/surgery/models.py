@@ -14,6 +14,21 @@ def validate_doctor(user):
         raise ValidationError("Clinical surgery author must be a doctor.")
 
 
+class InterventionType(models.Model):
+    name = models.CharField(max_length=180, unique=True)
+    code = models.CharField(max_length=60, unique=True)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("name",)
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Surgery(models.Model):
     class Status(models.TextChoices):
         DRAFT = "DRAFT", "Draft"
@@ -56,6 +71,13 @@ class Surgery(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
         related_name="surgeries_as_surgeon",
+    )
+    intervention_type = models.ForeignKey(
+        InterventionType,
+        on_delete=models.PROTECT,
+        blank=True,
+        null=True,
+        related_name="surgeries",
     )
     procedure_name = models.CharField(max_length=180)
     procedure_code = models.CharField(max_length=60, blank=True)

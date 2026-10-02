@@ -9,6 +9,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
 from apps.accounts.models import User
+from apps.audit.services import record_audit_event
 
 from .models import (
     ClinicalPhoto,
@@ -54,6 +55,33 @@ class DocumentCategoryViewSet(viewsets.ModelViewSet):
     filterset_fields = ("system_type", "is_active")
     search_fields = ("code", "name", "description")
     ordering = ("name",)
+
+    def _serialized(self, instance):
+        return self.get_serializer(instance).data
+
+    def perform_create(self, serializer):
+        category = serializer.save()
+        record_audit_event(
+            user=self.request.user,
+            action="DOCUMENT_CATEGORY_CREATED",
+            entity_type="DocumentCategory",
+            entity_id=category.pk,
+            new_data=self._serialized(category),
+            request=self.request,
+        )
+
+    def perform_update(self, serializer):
+        old_data = self._serialized(self.get_object())
+        category = serializer.save()
+        record_audit_event(
+            user=self.request.user,
+            action="DOCUMENT_CATEGORY_UPDATED",
+            entity_type="DocumentCategory",
+            entity_id=category.pk,
+            old_data=old_data,
+            new_data=self._serialized(category),
+            request=self.request,
+        )
 
 
 class DocumentViewSet(viewsets.ModelViewSet):

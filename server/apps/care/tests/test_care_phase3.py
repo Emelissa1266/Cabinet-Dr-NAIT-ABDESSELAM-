@@ -85,6 +85,25 @@ def test_care_catalog_crud_permissions(api_client, admin_user, secretary_user):
         format="json",
     )
     assert care_type.status_code == status.HTTP_201_CREATED
+    parameter = api_client.post(
+        "/api/v1/care-parameter-definitions/",
+        {
+            "care_type": care_type.data["id"],
+            "key": "wound_site",
+            "label": "Wound site",
+            "data_type": CareParameterDefinition.DataType.TEXT,
+            "required": False,
+            "active": True,
+        },
+        format="json",
+    )
+    assert parameter.status_code == status.HTTP_201_CREATED
+    assert AuditLog.objects.filter(action="CARE_CATEGORY_CREATED", entity_id=str(category.data["id"])).exists()
+    assert AuditLog.objects.filter(action="CARE_TYPE_CREATED", entity_id=str(care_type.data["id"])).exists()
+    assert AuditLog.objects.filter(
+        action="CARE_PARAMETER_DEFINITION_CREATED",
+        entity_id=str(parameter.data["id"]),
+    ).exists()
 
     api_client.force_authenticate(user=secretary_user)
     before = CareCategory.objects.count()

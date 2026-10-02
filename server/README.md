@@ -1,111 +1,93 @@
 # Clinic Management API
 
-Django REST backend for the Clinic Management project.
+Django REST Framework backend for the Clinic Management project.
 
-## Prerequisites
+## Requirements
 
-- Python 3.12 or newer
-- PostgreSQL 15+ or Supabase PostgreSQL
-- The existing Next.js frontend in `../client`
+- Python 3.13 compatible environment
+- PostgreSQL for development and production validation
+- `server/.env` created from `server/.env.example`
 
 ## Setup
-
-From the `server` directory:
 
 ```powershell
 python -m venv .venv
 .venv\Scripts\activate
 python -m pip install --upgrade pip
 pip install -r requirements/development.txt
-```
-
-Create a local environment file:
-
-```powershell
 Copy-Item .env.example .env
 ```
 
-Fill in `DJANGO_SECRET_KEY`, `DATABASE_URL` or the `DB_*` values, and the CORS origins for the frontend.
+Generate a local `DJANGO_SECRET_KEY` in `.env` and keep the PostgreSQL `DATABASE_URL` pointed at the intended development database. Do not commit `.env`.
 
 ## Database
 
-Use `DATABASE_URL` for Supabase PostgreSQL when available:
+The expected local development URL is:
 
 ```env
-DATABASE_URL=postgresql://USER:PASSWORD@HOST:PORT/DATABASE
-DB_SSL_REQUIRE=True
+DATABASE_URL=postgresql://clinic_user:clinic_dev_password@127.0.0.1:5432/clinic_db
+DB_SSL_REQUIRE=False
 ```
 
-For local bootstrapping without database credentials, development settings fall back to `db.sqlite3`. Production must use PostgreSQL.
-
-## Migrations
+Run migrations:
 
 ```powershell
 python manage.py migrate
+python manage.py showmigrations
 ```
 
-## Admin User
+## Development Users
+
+For reproducible local authenticated testing:
 
 ```powershell
-python manage.py createsuperuser
+$env:CLINIC_DEV_USER_PASSWORD="choose-a-local-password"
+python manage.py seed_dev_users
 ```
 
-## Development Server
+This command:
+
+- refuses to run when `DEBUG=False`
+- refuses SQLite
+- creates or updates `admin.demo`, `doctor.demo`, `nurse.demo`, and `secretary.demo`
+- requires the password through `CLINIC_DEV_USER_PASSWORD` or `--password`
+- does not print the password
+
+## Run
 
 ```powershell
 python manage.py runserver
 ```
 
-The API health endpoint is available at:
+Useful development endpoints:
 
-```text
-GET http://127.0.0.1:8000/api/v1/health/
-```
+- `GET /api/v1/health/`
+- `GET /api/schema/`
+- `GET /api/docs/`
 
-Expected response:
-
-```json
-{
-  "status": "ok",
-  "service": "clinic-management-api"
-}
-```
-
-## API Documentation
-
-- Swagger UI: `http://127.0.0.1:8000/api/docs/`
-- OpenAPI schema: `http://127.0.0.1:8000/api/schema/`
-
-## JWT
-
-Phase 1 configures JWT support and exposes the initial token endpoints:
+JWT endpoints:
 
 - `POST /api/v1/auth/login/`
 - `POST /api/v1/auth/refresh/`
 - `POST /api/v1/auth/logout/`
 - `GET /api/v1/auth/me/`
 
-The login response includes JWT tokens and the authenticated user's role/profile details.
+## Validation
 
-## Patients
-
-Phase 2 exposes the patient API:
-
-- `GET /api/v1/patients/`
-- `POST /api/v1/patients/`
-- `GET /api/v1/patients/{id}/`
-- `PATCH /api/v1/patients/{id}/`
-- `DELETE /api/v1/patients/{id}/`
-
-Supported query features include `search`, filtering, ordering, and page-number pagination.
-
-Patient references are generated automatically in the `P-00001` format. Clinical related information is modeled separately from administrative identity data.
-
-## Checks And Tests
+Run against PostgreSQL:
 
 ```powershell
 python manage.py check
-python manage.py test
+python manage.py check --deploy
+python manage.py makemigrations --check --dry-run
+python -m ruff check .
+python -m pytest
 ```
 
-The backend currently contains the foundation, accounts/roles, patients, patient medical-info structure, and patient audit preparation. Care, billing, agenda, documents, seed data, and later business-rule tests are intentionally deferred to later phases.
+`check --deploy` may report deployment-environment requirements such as TLS, proxy, HSTS, production hostnames, cookie security, and non-development secrets. Do not weaken development settings to silence production-only warnings.
+
+## Security Notes
+
+- PostgreSQL is the authoritative development baseline.
+- Private documents and clinical photos are served through authenticated endpoints, not public media URLs.
+- Production must provide real secrets, TLS termination, backups, monitoring, email/SMS providers as needed, and regulatory/operational review.

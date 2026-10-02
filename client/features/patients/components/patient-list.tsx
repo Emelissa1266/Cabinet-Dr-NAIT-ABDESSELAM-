@@ -91,9 +91,9 @@ export function PatientList({ basePath = "/patients", initialQuery = "", initial
     try {
       const patient = await createPatient(payload);
       setNewOpen(false);
-      setFeedback(`Dossier ${patient.patientReference} créé.`);
-      setQuery(patient.patientReference);
-      setDebouncedQuery(patient.patientReference);
+      setFeedback(`Dossier de ${patient.name} créé.`);
+      setQuery(patient.name);
+      setDebouncedQuery(patient.name);
       setPage(1);
       await loadPatients();
     } catch (cause) {
@@ -111,7 +111,7 @@ export function PatientList({ basePath = "/patients", initialQuery = "", initial
     try {
       await deletePatient(deleteTarget.apiId);
       setDeleteTarget(null);
-      setFeedback(`Dossier ${deleteTarget.patientReference} supprimé.`);
+      setFeedback(`Dossier de ${deleteTarget.name} supprimé.`);
       await loadPatients();
     } catch (cause) {
       setFeedback(patientErrorMessage(cause));
@@ -140,7 +140,7 @@ export function PatientList({ basePath = "/patients", initialQuery = "", initial
       <div className={styles.tableScroll}>
         <table className={styles.table}>
           <thead><tr><th>Patient</th><th>Téléphone</th><th>Naissance</th><th>Ville</th><th>Statut</th><th>Action</th></tr></thead>
-          <tbody>{!loading && patients.map((patient) => <tr key={patient.id}><td><Link href={`${basePath}/${patient.id}`} className={styles.identity}><span className={styles.avatar}>{patient.initials}</span><span><strong>{patient.name}</strong><small>{patient.patientReference}{patient.age !== null ? ` · ${patient.age} ans` : ""}</small></span></Link></td><td>{patient.phone || "Non renseigné"}</td><td className={styles.muted}>{formatDate(patient.dateOfBirth)}</td><td>{patient.city || "Non renseignée"}</td><td><StatusBadge tone={patient.isActive ? "success" : "neutral"}>{patient.status}</StatusBadge></td><td><Link href={`${basePath}/${patient.id}`} aria-label={`Ouvrir le dossier de ${patient.name}`}><Icon name="patient-folder" /></Link>{canDelete && <button className={styles.action} onClick={() => setDeleteTarget(patient)}>Supprimer</button>}</td></tr>)}</tbody>
+          <tbody>{!loading && patients.map((patient) => <tr key={patient.id}><td><Link href={`${basePath}/${patient.id}`} className={styles.identity}><span className={styles.avatar}>{patient.initials}</span><span><strong>{patient.name}</strong><small>{patient.age !== null ? `${patient.age} ans` : "Âge non renseigné"}</small></span></Link></td><td>{patient.phone || "Non renseigné"}</td><td className={styles.muted}>{formatDate(patient.dateOfBirth)}</td><td>{patient.city || "Non renseignée"}</td><td><StatusBadge tone={patient.isActive ? "success" : "neutral"}>{patient.status}</StatusBadge></td><td><Link href={`${basePath}/${patient.id}`} aria-label={`Ouvrir le dossier de ${patient.name}`}><Icon name="patient-folder" /></Link>{canDelete && <button className={styles.action} onClick={() => setDeleteTarget(patient)}>Supprimer</button>}</td></tr>)}</tbody>
         </table>
         {loading && <p className={styles.empty}>Chargement des patients…</p>}
         {!loading && error && <p className={styles.empty} role="alert">{error}</p>}
@@ -151,7 +151,7 @@ export function PatientList({ basePath = "/patients", initialQuery = "", initial
         <PatientForm busy={busy} errors={formErrors} onCancel={() => setNewOpen(false)} onSubmit={create} />
       </DetailDialog>
       <DetailDialog title="Supprimer le patient" open={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)}>
-        <p>Confirmez la suppression du dossier {deleteTarget?.patientReference}. Le backend refusera l’opération si votre rôle ou les contraintes médicales ne l’autorisent pas.</p>
+        <p>Confirmez la suppression du dossier de {deleteTarget?.name}. Le backend refusera l’opération si votre rôle ou les contraintes médicales ne l’autorisent pas.</p>
         <div className={styles.actions}><button className={`${styles.action} ${styles.primary}`} disabled={busy} onClick={confirmDelete}>{busy ? "Suppression…" : "Confirmer"}</button><button className={styles.action} disabled={busy} onClick={() => setDeleteTarget(null)}>Annuler</button></div>
       </DetailDialog>
     </div>

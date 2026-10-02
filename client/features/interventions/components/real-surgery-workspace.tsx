@@ -14,6 +14,7 @@ import type { Patient } from "@/features/patients/types";
 import ui from "@/components/ui/clinical.module.css";
 import type {
   AnesthesiaRecordApi,
+  InterventionTypeApi,
   IntraoperativeEventApi,
   PostoperativeAssessmentApi,
   PostoperativeFollowUpApi,
@@ -62,6 +63,7 @@ import {
   createSurgeryConsent,
   createSurgeryTeamMember,
   getSurgery,
+  listInterventionTypes,
   listAnesthesiaRecords,
   listIntraoperativeEvents,
   listOperativeRecords,
@@ -129,21 +131,44 @@ function localNowInput() {
   return now.toISOString().slice(0, 16);
 }
 
+function surgeryLabel(surgery: SurgeryApi) {
+  return surgery.intervention_type_name || surgery.procedure_name;
+}
+
 function SurgeryForm({
   surgery,
   patients,
+  interventionTypes,
   onCancel,
   onSave,
 }: {
   surgery?: SurgeryApi;
   patients: Patient[];
+  interventionTypes: InterventionTypeApi[];
   onCancel: () => void;
   onSave: (payload: SurgeryPayload) => Promise<void>;
 }) {
   const [patientId, setPatientId] = useState(surgery?.patient ?? patients[0]?.apiId ?? 0);
+  const [interventionTypeId, setInterventionTypeId] = useState(surgery?.intervention_type ?? (surgery ? 0 : interventionTypes[0]?.id ?? 0));
   const [consultations, setConsultations] = useState<Consultation[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const hasLegacyProcedure = Boolean(surgery && !surgery.intervention_type && surgery.procedure_name);
+  const availableInterventionTypes = surgery?.intervention_type && !interventionTypes.some((type) => type.id === surgery.intervention_type)
+    ? [
+        {
+          id: surgery.intervention_type,
+          name: surgery.intervention_type_name || surgery.procedure_name,
+          code: surgery.intervention_type_code || surgery.procedure_code,
+          description: surgery.procedure_description,
+          is_active: true,
+          created_at: surgery.created_at,
+          updated_at: surgery.updated_at,
+        },
+        ...interventionTypes,
+      ]
+    : interventionTypes;
+  const selectedInterventionTypeId = interventionTypeId || (surgery ? 0 : availableInterventionTypes[0]?.id ?? 0);
 
   useEffect(() => {
     if (!patientId) return;
@@ -166,21 +191,18 @@ function SurgeryForm({
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const procedureName = String(form.get("procedure_name") ?? "").trim();
     const indication = String(form.get("indication") ?? "").trim();
-    if (!patientId || !procedureName || !indication) {
-      setError("Patient, acte et indication sont obligatoires.");
+    if (!patientId || !indication || (!selectedInterventionTypeId && !hasLegacyProcedure)) {
+      setError("Patient, type d'intervention et indication sont obligatoires.");
       return;
     }
     setBusy(true);
     setError("");
     try {
-      await onSave({
+      const payload: SurgeryPayload = {
         patient: patientId,
         consultation: Number(form.get("consultation")) || null,
-        procedure_name: procedureName,
-        procedure_code: String(form.get("procedure_code") ?? "").trim(),
-        procedure_description: String(form.get("procedure_description") ?? "").trim(),
+        intervention_type: selectedInterventionTypeId || null,
         indication,
         planned_date: toIsoFromLocalInput(form.get("planned_date")),
         priority: String(form.get("priority")) as SurgeryPriority,
@@ -188,7 +210,13 @@ function SurgeryForm({
         anatomical_site: String(form.get("anatomical_site") ?? "").trim(),
         anesthesia_type: String(form.get("anesthesia_type")) as SurgeryAnesthesiaType | "",
         notes: String(form.get("notes") ?? "").trim(),
-      });
+      };
+      if (!selectedInterventionTypeId && hasLegacyProcedure && surgery) {
+        payload.procedure_name = surgery.procedure_name;
+        payload.procedure_code = surgery.procedure_code;
+        payload.procedure_description = surgery.procedure_description;
+      }
+      await onSave(payload);
     } catch (cause) {
       setError(surgeryErrorMessage(cause));
     } finally {
@@ -201,7 +229,7 @@ function SurgeryForm({
       <label>Patient
         <select value={patientId || ""} onChange={(event) => setPatientId(Number(event.target.value))} disabled={Boolean(surgery)} required>
           <option value="" disabled>Sélectionner un patient</option>
-          {patients.map((patient) => <option key={patient.apiId} value={patient.apiId}>{patient.name} · {patient.patientReference}</option>)}
+          {patients.map((patient) => <option key={patient.apiId} value={patient.apiId}>{patient.name}</option>)}
         </select>
       </label>
       <label>Consultation liée
@@ -210,9 +238,13 @@ function SurgeryForm({
           {consultations.map((consultation) => <option key={consultation.id} value={consultation.id}>{dateTime(consultation.consultation_date)} · {consultation.reason || consultation.consultation_type}</option>)}
         </select>
       </label>
-      <label>Acte chirurgical<input name="procedure_name" defaultValue={surgery?.procedure_name ?? ""} maxLength={180} required /></label>
-      <label>Code<input name="procedure_code" defaultValue={surgery?.procedure_code ?? ""} maxLength={60} /></label>
-      <label>Description<textarea name="procedure_description" defaultValue={surgery?.procedure_description ?? ""} /></label>
+      <label>Type d&apos;intervention
+        <select value={selectedInterventionTypeId || ""} onChange={(event) => setInterventionTypeId(Number(event.target.value) || 0)} required={!hasLegacyProcedure}>
+          <option value="" disabled={!hasLegacyProcedure}>{hasLegacyProcedure ? "Conserver intervention historique" : "Sélectionner un type"}</option>
+          {availableInterventionTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
+        </select>
+      </label>
+      {hasLegacyProcedure && <p className={ui.empty}>Intervention historique: {surgery?.procedure_name}</p>}
       <label>Indication<textarea name="indication" defaultValue={surgery?.indication ?? ""} required /></label>
       <div className={ui.toolbar}>
         <label>Date planifiée<input name="planned_date" type="datetime-local" defaultValue={dateInput(surgery?.planned_date)} /></label>
@@ -226,7 +258,7 @@ function SurgeryForm({
       <label>Notes<textarea name="notes" defaultValue={surgery?.notes ?? ""} /></label>
       {error && <p role="alert">{error}</p>}
       <div className={ui.actions}>
-        <button className={`${ui.action} ${ui.primary}`} disabled={busy}>{busy ? "Enregistrement..." : "Enregistrer"}</button>
+        <button className={`${ui.action} ${ui.primary}`} disabled={busy || (!availableInterventionTypes.length && !hasLegacyProcedure)}>{busy ? "Enregistrement..." : "Enregistrer"}</button>
         <button className={ui.action} type="button" disabled={busy} onClick={onCancel}>Annuler</button>
       </div>
     </form>
@@ -238,6 +270,7 @@ export function RealSurgeryWorkspace() {
   const [surgeryCount, setSurgeryCount] = useState(0);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [staff, setStaff] = useState<AgendaStaff[]>([]);
+  const [interventionTypes, setInterventionTypes] = useState<InterventionTypeApi[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<SurgeryDetailState>(emptyDetail);
   const [search, setSearch] = useState("");
@@ -264,7 +297,12 @@ export function RealSurgeryWorkspace() {
   }, [page, search, status]);
 
   const loadStatic = useCallback(async () => {
-    setStaff(await listAgendaStaff());
+    const [staffMembers, interventionTypePage] = await Promise.all([
+      listAgendaStaff(),
+      listInterventionTypes({ is_active: true, ordering: "name" }),
+    ]);
+    setStaff(staffMembers);
+    setInterventionTypes(interventionTypePage.results);
   }, []);
 
   const loadDetail = useCallback(async (surgeryId: number) => {
@@ -373,7 +411,7 @@ export function RealSurgeryWorkspace() {
   async function saveSurgery(payload: SurgeryPayload) {
     const saved = editing === "new" ? await createSurgery(payload) : await updateSurgery((editing as SurgeryApi).id, payload);
     setEditing(null);
-    setMessage(`Intervention #${saved.id} enregistrée.`);
+    setMessage(`Intervention ${surgeryLabel(saved)} enregistrée.`);
     await loadSurgeries();
     setSelectedId(saved.id);
   }
@@ -602,7 +640,7 @@ export function RealSurgeryWorkspace() {
       {error && <p className={ui.panel} role="alert">{error}</p>}
       {message && <p className={ui.panel} role="status">{message}</p>}
       <div className={ui.toolbar}>
-        <label className={ui.search}><span className="sr-only">Rechercher</span><input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Patient, acte, site..." /></label>
+        <label className={ui.search}><span className="sr-only">Rechercher</span><input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Patient, intervention, site..." /></label>
         <div className={ui.actions}>
           <label className={styles.filter}>Statut<select value={status} onChange={(event) => { setStatus(event.target.value as SurgeryStatus | ""); setPage(1); }}>{surgeryStatuses.map((item) => <option key={item || "all"} value={item}>{item ? surgeryStatusLabels[item] : "Tous"}</option>)}</select></label>
           <button className={ui.action} onClick={() => { setSearch(""); setStatus(""); setPage(1); }}>Réinitialiser</button>
@@ -620,8 +658,8 @@ export function RealSurgeryWorkspace() {
                 return (
                   <tr key={surgery.id} data-selected={surgery.id === selected?.id}>
                     <td>{dateTime(surgery.planned_date)}<small>{surgeryStatusLabels[surgery.status]}</small></td>
-                    <td><button className={styles.patient} onClick={() => setSelectedId(surgery.id)}>{patientName(patient)}</button><small>{patient?.patientReference ?? `#${surgery.patient}`}</small></td>
-                    <td>{surgery.procedure_name}<small>{surgery.anatomical_site || surgery.procedure_code}</small></td>
+                    <td><button className={styles.patient} onClick={() => setSelectedId(surgery.id)}>{patientName(patient)}</button><small>{surgery.anatomical_site || surgeryStatusLabels[surgery.status]}</small></td>
+                    <td>{surgeryLabel(surgery)}<small>{surgery.anatomical_site || surgeryStatusLabels[surgery.status]}</small></td>
                     <td>{staffName(surgeon)}<small>{surgery.anesthesia_type ? anesthesiaLabels[surgery.anesthesia_type] : "Anesthésie non renseignée"}</small></td>
                   </tr>
                 );
@@ -632,17 +670,17 @@ export function RealSurgeryWorkspace() {
           </section>
           {selected && (
             <aside className={ui.panel} aria-label="Fiche d’intervention">
-              <div className={ui.actions}><p className={ui.eyebrow}>Fiche d’intervention #{selected.id}</p><StatusBadge tone={statusTone(selected.status)}>{surgeryStatusLabels[selected.status]}</StatusBadge></div>
-              <h2>{selected.procedure_name}</h2>
+              <div className={ui.actions}><p className={ui.eyebrow}>Fiche d’intervention</p><StatusBadge tone={statusTone(selected.status)}>{surgeryStatusLabels[selected.status]}</StatusBadge></div>
+              <h2>{surgeryLabel(selected)}</h2>
               <p>{patientName(selectedPatient)} · {staffName(selectedSurgeon)}</p>
-              {selectedPatient && <Link href={`/patients/${selectedPatient.id}`} className={styles.record}>Dossier {selectedPatient.patientReference}</Link>}
+              {selectedPatient && <Link href={`/patients/${selectedPatient.patientReference}`} className={styles.record}>Dossier patient</Link>}
               <div className={styles.path}><span>Brouillon</span><span>Planifiée</span><strong>Pré-op</strong><span>Bloc</span><span>Post-op</span></div>
               <dl className={styles.details}>
                 <dt>Date planifiée</dt><dd>{dateTime(selected.planned_date)}</dd>
                 <dt>Indication</dt><dd>{selected.indication}</dd>
                 <dt>Anesthésie</dt><dd>{selected.anesthesia_type ? anesthesiaLabels[selected.anesthesia_type] : "Non renseignée"}</dd>
                 <dt>Priorité</dt><dd>{surgeryPriorityLabels[selected.priority]}</dd>
-                <dt>Consultation</dt><dd>{selected.consultation ? `#${selected.consultation}` : "Non liée"}</dd>
+                <dt>Consultation</dt><dd>{selected.consultation ? "Consultation liée à l’intervention" : "Non liée"}</dd>
               </dl>
               <div className={ui.actions}>
                 <button className={ui.action} disabled={busy} onClick={() => setEditing(selected)}>Modifier</button>
@@ -704,7 +742,7 @@ export function RealSurgeryWorkspace() {
         </div>
       )}
       <DetailDialog title={editing === "new" ? "Nouvelle intervention" : "Modifier intervention"} open={Boolean(editing)} onClose={() => setEditing(null)}>
-        {editing && <SurgeryForm surgery={editing === "new" ? undefined : editing} patients={patients} onCancel={() => setEditing(null)} onSave={saveSurgery} />}
+        {editing && <SurgeryForm surgery={editing === "new" ? undefined : editing} patients={patients} interventionTypes={interventionTypes} onCancel={() => setEditing(null)} onSave={saveSurgery} />}
       </DetailDialog>
     </main>
   );

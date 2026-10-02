@@ -119,7 +119,7 @@ function CarePlanForm({
       <label>Patient
         <select value={patientId || ""} onChange={(event) => setPatientId(Number(event.target.value))} required disabled={Boolean(care)}>
           <option value="" disabled>Sélectionner un patient</option>
-          {patients.map((patient) => <option key={patient.apiId} value={patient.apiId}>{patient.name} · {patient.patientReference}</option>)}
+          {patients.map((patient) => <option key={patient.apiId} value={patient.apiId}>{patient.name}</option>)}
         </select>
       </label>
       <label>Type de soin
@@ -246,7 +246,7 @@ export function RealCareWorkspace() {
 
   async function saveCare(payload: CreateCarePayload | UpdateCarePayload) {
     const saved = editing === "new" ? await createCare(payload as CreateCarePayload) : await updateCare((editing as CareApi).id, payload);
-    setFeedback(`Plan de soin #${saved.id} enregistré.`);
+    setFeedback(`Plan de soin ${careTypeName(careType(saved, careTypes))} enregistré.`);
     setEditing(null);
     await loadCares();
     setSelected(saved);
@@ -288,7 +288,7 @@ export function RealCareWorkspace() {
                   const type = careType(care, careTypes);
                   return (
                     <tr key={care.id} onClick={() => setSelected(care)} aria-selected={selected?.id === care.id}>
-                      <td><strong>{patientName(patient)}</strong><small>#{care.id} · {dateOnly(care.start_date)}</small></td>
+                      <td><strong>{patientName(patient)}</strong><small>Début {dateOnly(care.start_date)}</small></td>
                       <td>{careTypeName(type)}<small>{type ? categories.find((category) => category.id === type.category)?.name : ""}</small></td>
                       <td><StatusBadge tone={care.status === "COMPLETED" ? "success" : care.status === "IN_PROGRESS" ? "teal" : "neutral"}>{careStatusLabels[care.status]}</StatusBadge></td>
                       <td>{care.completed_sessions}/{care.planned_sessions}<small>{care.remaining_sessions} restantes · {care.progress_percentage}%</small></td>
@@ -319,17 +319,17 @@ export function RealCareWorkspace() {
                   <dt>Séances</dt><dd>{selected.completed_sessions}/{selected.planned_sessions} réalisées · {selected.remaining_sessions} restantes</dd>
                   <dt>Progression</dt><dd>{selected.progress_percentage}% backend</dd>
                   <dt>Total</dt><dd>{decimalAmount(selected.total_price)}</dd>
-                  <dt>Consultation</dt><dd>{selected.consultation ? `#${selected.consultation}` : "Non liée"}</dd>
+                  <dt>Consultation</dt><dd>{selected.consultation ? "Consultation liée au plan" : "Non liée"}</dd>
                 </dl>
                 <p>{selected.notes || "Aucune note médicale renseignée."}</p>
                 <div className={ui.actions}>
                   <button className={ui.action} onClick={() => setEditing(selected)}>Modifier</button>
-                  {selectedPatient && <Link className={ui.action} href={`/patients/${selectedPatient.id}`}>Dossier patient</Link>}
+                  {selectedPatient && <Link className={ui.action} href={`/patients/${selectedPatient.patientReference}`}>Dossier patient</Link>}
                 </div>
                 <h3>Séances</h3>
                 {busyDetail ? <p role="status">Chargement des séances...</p> : sessions.length ? (
                   <ul>
-                    {sessions.map((session) => <li key={session.id}>#{session.id} · {careSessionTime(session)} · {session.status}</li>)}
+                    {sessions.map((session, index) => <li key={session.id}>Séance {index + 1} · {careSessionTime(session)} · {session.status}</li>)}
                   </ul>
                 ) : <p>Aucune séance planifiée pour ce soin.</p>}
               </>
