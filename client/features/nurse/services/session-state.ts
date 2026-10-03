@@ -9,7 +9,7 @@ export function validateRecord(record: NursingRecord, laser: boolean): string | 
     if (![record.performedTreatment, record.zone, record.observations].every(value => value.trim()) || !record.tolerance || !record.reaction)
         return "Renseignez le soin réalisé, la zone, la tolérance, la réaction et les observations.";
     if (laser && (![record.device, record.wavelength].every(value => value.trim()) || [record.fluence, record.spotSize, record.frequency].some(value => !value.trim() || !Number.isFinite(Number(value)) || Number(value) <= 0)))
-        return "Renseignez l’appareil, la longueur d’onde et les paramètres réellement utilisés.";
+        return "Renseignez l’appareil, la longueur d’onde et les paramètres utilisés.";
     if ((record.reaction === "Importante" || record.tolerance === "Difficile") && !record.incidents.trim())
         return "Décrivez l’incident pour transmission au praticien.";
     return null;

@@ -34,6 +34,7 @@ import {
 } from "../services/agenda-form";
 import { agendaErrorMessage, agendaFieldErrors, type FieldErrors } from "../services/agenda-errors";
 import { labelClinicDate, localAppointmentIso, shiftClinicDate } from "../utils/clinic-time";
+import { roleLabel } from "@/lib/presentation";
 import ui from "@/components/ui/clinical.module.css";
 import styles from "./calendar.module.css";
 
@@ -46,6 +47,15 @@ const statusLabels: Record<AppointmentStatus, string> = {
   COMPLETED: "Terminé",
   CANCELLED: "Annulé",
   NO_SHOW: "Absent",
+};
+const categoryLabels: Record<AppointmentType["category"], string> = {
+  CONSULTATION: "Consultation",
+  FOLLOW_UP: "Suivi",
+  SURGERY: "Intervention",
+  NURSING_CARE: "Soin infirmier",
+  PREOPERATIVE: "Préopératoire",
+  POSTOPERATIVE: "Postopératoire",
+  OTHER: "Autre",
 };
 const terminalStatuses: AppointmentStatus[] = ["COMPLETED", "CANCELLED", "NO_SHOW"];
 
@@ -273,7 +283,7 @@ export function AgendaCalendar({ basePath = "/agenda", initialDate = today(), in
     </header>
     <div className={styles.toolbar}>
       <div className={ui.actions}><button className={ui.action} aria-label="Période précédente" onClick={() => setDate(shiftClinicDate(date, view === "week" ? -7 : -1))}>‹</button><input type="date" aria-label="Date de l’agenda" value={date} onChange={(event) => event.target.value && setDate(event.target.value)} /><button className={ui.action} onClick={() => setDate(today())}>Aujourd’hui</button><button className={ui.action} aria-label="Période suivante" onClick={() => setDate(shiftClinicDate(date, view === "week" ? 7 : 1))}>›</button><strong>{labelClinicDate(days[0], { day: "numeric", month: "long" })}{view === "week" && ` — ${labelClinicDate(days[6], { day: "numeric", month: "long", year: "numeric" })}`}</strong></div>
-      <div className={ui.actions}><div className={ui.tabs} aria-label="Vue du calendrier"><button className={ui.tab} aria-pressed={view === "day"} onClick={() => setView("day")}>Jour</button><button className={ui.tab} aria-pressed={view === "week"} onClick={() => setView("week")}>Semaine</button></div><select aria-label="Personnel" value={staffFilter} onChange={(event) => setStaffFilter(event.target.value)}><option value="">Tous les personnels</option>{staff.map((member) => <option key={member.id} value={member.id}>{staffName(member)} · {member.role}</option>)}</select><select aria-label="Type de rendez-vous" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}><option value="">Tous les types</option>{appointmentTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}</select><select aria-label="Catégorie" value={category} onChange={(event) => setCategory(event.target.value as AppointmentType["category"] | "")}><option value="">Toutes catégories</option>{Array.from(new Set(appointmentTypes.map((type) => type.category))).map((value) => <option key={value} value={value}>{value}</option>)}</select><select aria-label="Statut" value={status} onChange={(event) => setStatus(event.target.value as AppointmentStatus | "")}><option value="">Tous statuts</option>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
+      <div className={ui.actions}><div className={ui.tabs} aria-label="Vue du calendrier"><button className={ui.tab} aria-pressed={view === "day"} onClick={() => setView("day")}>Jour</button><button className={ui.tab} aria-pressed={view === "week"} onClick={() => setView("week")}>Semaine</button></div><select aria-label="Personnel" value={staffFilter} onChange={(event) => setStaffFilter(event.target.value)}><option value="">Tous les personnels</option>{staff.map((member) => <option key={member.id} value={member.id}>{staffName(member)} · {roleLabel(member.role)}</option>)}</select><select aria-label="Type de rendez-vous" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}><option value="">Tous les types</option>{appointmentTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}</select><select aria-label="Catégorie" value={category} onChange={(event) => setCategory(event.target.value as AppointmentType["category"] | "")}><option value="">Toutes catégories</option>{Array.from(new Set(appointmentTypes.map((type) => type.category))).map((value) => <option key={value} value={value}>{categoryLabels[value]}</option>)}</select><select aria-label="Statut" value={status} onChange={(event) => setStatus(event.target.value as AppointmentStatus | "")}><option value="">Tous statuts</option>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
     </div>
     {feedback && <p className={ui.panel} role="status">{feedback}</p>}
     {error && <p className={ui.empty} role="alert">{error}</p>}
@@ -339,7 +349,7 @@ function AppointmentForm({ appointment, patients, patientQuery, appointmentTypes
     <label>Rechercher patient<input value={patientQuery} onChange={(event) => void onPatientSearch(event.target.value)} placeholder="Nom, référence, téléphone..." /></label>
     <label>Patient *<select name="patient" required defaultValue={patientId || ""} disabled={Boolean(appointment)}><option value="" disabled>Sélectionner un patient</option>{patients.map((patient) => <option key={patient.apiId} value={patient.apiId}>{patient.name}</option>)}</select>{field(errors, "patient")}</label>
     <label>Type de rendez-vous *<select name="appointment_type" required value={selectedTypeId || ""} disabled={Boolean(appointment)} onChange={(event) => selectType(Number(event.target.value))}>{appointmentTypes.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.default_duration_minutes} min</option>)}</select>{field(errors, "appointment_type")}</label>
-    <label>Personnel principal *<select name="primary_staff" required value={selectedStaffId || ""} disabled={Boolean(appointment) || !matchingStaff.length} onChange={(event) => setSelectedStaffId(Number(event.target.value))}><option value="" disabled>{matchingStaff.length ? "Sélectionner" : "Aucun personnel compatible"}</option>{matchingStaff.map((member) => <option key={member.id} value={member.id}>{staffName(member)} · {member.role}</option>)}</select>{field(errors, "primary_staff")}</label>
+    <label>Personnel principal *<select name="primary_staff" required value={selectedStaffId || ""} disabled={Boolean(appointment) || !matchingStaff.length} onChange={(event) => setSelectedStaffId(Number(event.target.value))}><option value="" disabled>{matchingStaff.length ? "Sélectionner" : "Aucun personnel compatible"}</option>{matchingStaff.map((member) => <option key={member.id} value={member.id}>{staffName(member)} · {roleLabel(member.role)}</option>)}</select>{field(errors, "primary_staff")}</label>
     {!matchingStaff.length && <p className={ui.empty} role="alert">Aucun personnel actif ne correspond au rôle requis par ce type de rendez-vous.</p>}
     <div className={ui.actions}><label>Date *<input name="date" type="date" required value={selectedDate} disabled={Boolean(appointment)} onChange={(event) => setSelectedDate(event.target.value)} /></label><label>Heure *<input name="time" type="time" required value={selectedTime} disabled={Boolean(appointment)} onChange={(event) => setSelectedTime(event.target.value)} /></label><label>Durée *<input name="duration" type="number" readOnly required value={appointment ? durationMinutes(appointment) : duration} /></label></div>
     <label>Motif<input name="reason" defaultValue={appointment?.reason ?? ""} /></label>{field(errors, "reason")}

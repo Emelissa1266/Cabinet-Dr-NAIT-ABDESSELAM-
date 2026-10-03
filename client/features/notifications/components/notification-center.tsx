@@ -149,7 +149,7 @@ export function NotificationCenter({ onUnreadChange }: { onUnreadChange?: (count
               </div>
             </li>
           ))}
-          {!items.length && <li>Aucune notification réelle pour ces critères.</li>}
+          {!items.length && <li>Aucune notification pour ces critères.</li>}
         </ul>
       )}
     </div>

@@ -10,6 +10,7 @@ import type { DashboardActivity, DashboardApi, DashboardAppointmentPreview, Dash
 import { getDashboard } from "../services/dashboard-api-service";
 import { dashboardErrorMessage, dateTime, money } from "../services/dashboard-display";
 import { appointmentDisplay, careSessionDisplay, dashboardFailureState, dashboardRoleCopy, surgeryDisplay } from "../services/dashboard-view";
+import { auditActionLabel, entityLabel, personName, statusLabel } from "@/lib/presentation";
 
 function AppointmentList({ items }: { items: DashboardAppointmentPreview[] }) {
   return (
@@ -20,7 +21,7 @@ function AppointmentList({ items }: { items: DashboardAppointmentPreview[] }) {
           <span>{appointmentDisplay(item).subtitle}</span>
           <small>{dateTime(item.start_at)}</small>
           <small>{appointmentDisplay(item).meta}</small>
-          <StatusBadge tone="neutral">{item.status}</StatusBadge>
+          <StatusBadge tone="neutral">{statusLabel(item.status)}</StatusBadge>
           <Link className={workspace.link} href="/agenda">Agenda</Link>
         </li>
       ))}
@@ -37,7 +38,7 @@ function SurgeryList({ items }: { items: DashboardSurgeryPreview[] }) {
           <strong>{surgeryDisplay(item).title}</strong>
           <span>{surgeryDisplay(item).subtitle}</span>
           <small>{dateTime(item.planned_date)}</small>
-          <StatusBadge tone="teal">{item.status}</StatusBadge>
+          <StatusBadge tone="teal">{statusLabel(item.status)}</StatusBadge>
           <Link className={workspace.link} href="/interventions">Interventions</Link>
         </li>
       ))}
@@ -55,7 +56,7 @@ function CareSessionList({ items }: { items: DashboardCareSessionPreview[] }) {
           <span>{careSessionDisplay(item).subtitle}</span>
           <small>{dateTime(item.scheduled_at)}</small>
           <small>{careSessionDisplay(item).meta}</small>
-          <StatusBadge tone="neutral">{item.status}</StatusBadge>
+          <StatusBadge tone="neutral">{statusLabel(item.status)}</StatusBadge>
           <Link className={workspace.link} href={`/nurse/care?session=${item.id}`}>Ouvrir le soin</Link>
         </li>
       ))}
@@ -85,8 +86,8 @@ function ActivityList({ items }: { items: DashboardActivity[] }) {
     <ul className={workspace.list}>
       {items.map((item, index) => (
         <li key={`${item.created_at}-${index}`}>
-          <strong>{item.action}</strong>
-          <small>{item.entity_type} · {item.actor || "Système"} · {dateTime(item.created_at)}</small>
+          <strong>{auditActionLabel(item.action)}</strong>
+          <small>{entityLabel(item.entity_type)} · {personName(item.actor)} · {dateTime(item.created_at)}</small>
         </li>
       ))}
       {!items.length && <li>Aucune activité récente dans l’aperçu.</li>}

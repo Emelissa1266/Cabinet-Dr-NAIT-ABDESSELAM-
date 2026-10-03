@@ -1,7 +1,21 @@
 import { ApiError } from "@/lib/api-client";
 import type { AgendaStaff } from "@/features/agenda/types";
 import type { Patient } from "@/features/patients/types";
-import type { SurgeryAnesthesiaType, SurgeryApi, SurgeryPriority, SurgeryStatus } from "../api-types";
+import type {
+  IntraoperativeEventType,
+  IntraoperativeSeverity,
+  PreopChecklistStatus,
+  PreopReadinessStatus,
+  PreopRequirementStatus,
+  PreopRequirementType,
+  SurgeryAnesthesiaType,
+  SurgeryApi,
+  SurgeryComplicationSeverity,
+  SurgeryConsentStatus,
+  SurgeryPriority,
+  SurgeryStatus,
+  SurgeryTeamRole,
+} from "../api-types";
 
 export const surgeryStatusLabels: Record<SurgeryStatus, string> = {
   DRAFT: "Brouillon",
@@ -28,12 +42,107 @@ export const anesthesiaLabels: Record<SurgeryAnesthesiaType, string> = {
   OTHER: "Autre",
 };
 
+export const preopReadinessLabels: Record<PreopReadinessStatus, string> = {
+  PENDING: "En attente",
+  NEEDS_REVIEW: "À revoir",
+  READY: "Prêt",
+  NOT_READY: "Non prêt",
+};
+
+export const preopChecklistStatusLabels: Record<PreopChecklistStatus, string> = {
+  PENDING: "En attente",
+  COMPLETED: "Réalisé",
+  NOT_APPLICABLE: "Non applicable",
+  BLOCKED: "Bloqué",
+};
+
+export const preopRequirementTypeLabels: Record<PreopRequirementType, string> = {
+  LAB: "Analyse",
+  IMAGING: "Imagerie",
+  ANESTHESIA: "Anesthésie",
+  MEDICAL_CLEARANCE: "Avis médical",
+  OTHER: "Autre",
+};
+
+export const preopRequirementStatusLabels: Record<PreopRequirementStatus, string> = {
+  PENDING: "En attente",
+  SATISFIED: "Satisfait",
+  BLOCKED: "Bloqué",
+  WAIVED: "Dispensé",
+};
+
+export const surgeryConsentStatusLabels: Record<SurgeryConsentStatus, string> = {
+  PENDING: "En attente",
+  CONFIRMED: "Confirmé",
+  DECLINED: "Refusé",
+  REVOKED: "Révoqué",
+};
+
+export const surgeryTeamRoleLabels: Record<SurgeryTeamRole, string> = {
+  SURGEON: "Chirurgien",
+  ASSISTANT: "Assistant",
+  NURSE: "Infirmier",
+  ANESTHESIA: "Anesthésie",
+  OTHER: "Autre",
+};
+
+export const intraoperativeEventTypeLabels: Record<IntraoperativeEventType, string> = {
+  MEDICATION: "Médication",
+  COMPLICATION: "Complication",
+  OBSERVATION: "Observation",
+  DEVICE: "Dispositif",
+  OTHER: "Autre",
+};
+
+export const intraoperativeSeverityLabels: Record<Exclude<IntraoperativeSeverity, "">, string> = {
+  LOW: "Faible",
+  MODERATE: "Modérée",
+  HIGH: "Élevée",
+  CRITICAL: "Critique",
+};
+
+export const surgeryComplicationSeverityLabels: Record<SurgeryComplicationSeverity, string> = {
+  MINOR: "Mineure",
+  MODERATE: "Modérée",
+  SEVERE: "Sévère",
+  CRITICAL: "Critique",
+};
+
+export const fastingStatusLabels: Record<string, string> = {
+  UNKNOWN: "Non renseigné",
+  CONFIRMED: "Confirmé",
+  NOT_FASTED: "Non à jeun",
+  NOT_REQUIRED: "Non requis",
+};
+
+export const anesthesiaEvaluationStatusLabels: Record<string, string> = {
+  PENDING: "En attente",
+  CLEARED: "Validée",
+  NEEDS_REVIEW: "À revoir",
+  NOT_REQUIRED: "Non requise",
+};
+
+export const pregnancyStatusLabels: Record<string, string> = {
+  NOT_APPLICABLE: "Non applicable",
+  UNKNOWN: "Non renseigné",
+  NEGATIVE: "Négatif",
+  POSITIVE: "Positif",
+};
+
+export const preopReviewLabels: Record<string, string> = {
+  medical_history_reviewed: "Antécédents vérifiés",
+  allergies_reviewed: "Allergies vérifiées",
+  medications_reviewed: "Traitements vérifiés",
+  contraindications_reviewed: "Contre-indications vérifiées",
+  required_tests_reviewed: "Examens requis vérifiés",
+};
+
 export function surgeryErrorMessage(cause: unknown) {
   if (cause instanceof ApiError) {
     if (cause.status === 0) return "Connexion au serveur impossible.";
-    return `${cause.status} — ${cause.message}`;
+    return cause.message || "Impossible de traiter l’intervention.";
   }
-  return "La requête Surgery a échoué.";
+  return "Impossible de traiter l’intervention.";
 }
 
 export function patientName(patient?: Patient) {

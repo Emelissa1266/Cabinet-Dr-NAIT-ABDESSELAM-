@@ -22,6 +22,7 @@ import {
   dateOnly,
   decimalAmount,
   patientName,
+  sessionStatusLabels,
   staffName,
 } from "../services/care-display";
 import {
@@ -263,7 +264,7 @@ export function RealCareWorkspace() {
         <div>
           <p className={ui.eyebrow}>Soins infirmiers</p>
           <h1 className={ui.title}>Plans de soins</h1>
-          <p className={ui.description}>Prescription médicale, affectation infirmière, progression et séances réelles.</p>
+          <p className={ui.description}>Prescription médicale, affectation infirmière, progression et séances planifiées.</p>
         </div>
         <div className={ui.actions}>
           <button className={`${ui.action} ${ui.primary}`} onClick={() => setEditing("new")}>Nouveau soin</button>
@@ -329,7 +330,7 @@ export function RealCareWorkspace() {
                 <h3>Séances</h3>
                 {busyDetail ? <p role="status">Chargement des séances...</p> : sessions.length ? (
                   <ul>
-                    {sessions.map((session, index) => <li key={session.id}>Séance {index + 1} · {careSessionTime(session)} · {session.status}</li>)}
+                    {sessions.map((session, index) => <li key={session.id}>Séance {index + 1} · {careSessionTime(session)} · {sessionStatusLabels[session.status]}</li>)}
                   </ul>
                 ) : <p>Aucune séance planifiée pour ce soin.</p>}
               </>

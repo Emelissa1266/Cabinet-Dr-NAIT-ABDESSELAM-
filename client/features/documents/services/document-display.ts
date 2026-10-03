@@ -29,9 +29,9 @@ export function documentErrorMessage(cause: unknown) {
     if (cause.status === 0) return "Connexion au serveur impossible.";
     if (cause.status === 403) return "Accès refusé pour ce fichier clinique.";
     if (cause.status === 404) return "Fichier introuvable ou non accessible.";
-    return `${cause.status} — ${cause.message}`;
+    return cause.message || "Impossible de traiter le fichier clinique.";
   }
-  return "La requête document a échoué.";
+  return "Impossible de traiter le fichier clinique.";
 }
 
 export function dateOnly(value: string | null | undefined) {

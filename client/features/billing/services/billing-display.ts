@@ -26,9 +26,9 @@ export const paymentMethodLabels: Record<PaymentMethod, string> = {
 export function billingErrorMessage(cause: unknown) {
   if (cause instanceof ApiError) {
     if (cause.status === 0) return "Connexion au serveur impossible.";
-    return `${cause.status} — ${cause.message}`;
+    return cause.message || "Impossible de traiter la demande financière.";
   }
-  return "La requête financière a échoué.";
+  return "Impossible de traiter la demande financière.";
 }
 
 export function money(value: string | null | undefined, currency = "DZD") {

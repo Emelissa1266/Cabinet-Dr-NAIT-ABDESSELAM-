@@ -6,7 +6,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import type { Patient } from "@/features/patients/types";
 import ui from "@/components/ui/clinical.module.css";
 import type { SurgeryApi } from "../api-types";
-import { dateTime, statusTone, surgeryErrorMessage, surgeryStatusLabels } from "../services/surgery-display";
+import { anesthesiaLabels, dateTime, statusTone, surgeryErrorMessage, surgeryStatusLabels } from "../services/surgery-display";
 import { listSurgeries } from "../services/surgery-api-service";
 
 export function PatientSurgerySection({ patient }: { patient: Patient }) {
@@ -53,10 +53,10 @@ export function PatientSurgerySection({ patient }: { patient: Patient }) {
             <tbody>
               {surgeries.map((surgery) => (
                 <tr key={surgery.id}>
-                  <td>{dateTime(surgery.planned_date)}<small>#{surgery.id}</small></td>
+                  <td>{dateTime(surgery.planned_date)}</td>
                   <td>{surgery.procedure_name}<small>{surgery.anatomical_site || surgery.procedure_code}</small></td>
                   <td><StatusBadge tone={statusTone(surgery.status)}>{surgeryStatusLabels[surgery.status]}</StatusBadge></td>
-                  <td>{surgery.anesthesia_type || "Non renseignée"}</td>
+                  <td>{surgery.anesthesia_type ? anesthesiaLabels[surgery.anesthesia_type] : "Non renseignée"}</td>
                 </tr>
               ))}
             </tbody>

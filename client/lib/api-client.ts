@@ -145,7 +145,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
   );
 
   const data = await readResponse(response);
-  if (!response.ok) throw new ApiError(jsonMessage(data, "La requête a échoué."), response.status, data);
+  if (!response.ok) throw new ApiError(jsonMessage(data, "Impossible de traiter la demande."), response.status, data);
   return data as T;
 }
 
@@ -173,7 +173,7 @@ export async function apiBlobRequest(path: string, options: ApiRequestOptions = 
 
   if (!response.ok) {
     const data = await readResponse(response);
-    throw new ApiError(jsonMessage(data, "La requête a échoué."), response.status, data);
+    throw new ApiError(jsonMessage(data, "Impossible de traiter la demande."), response.status, data);
   }
 
   return { blob: await response.blob(), headers: response.headers, status: response.status };

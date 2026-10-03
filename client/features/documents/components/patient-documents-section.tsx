@@ -189,7 +189,7 @@ export function PatientDocumentsSection({ patient }: { patient: Patient }) {
               </div>
             </li>
           ))}
-          {!documents.length && <li>Aucun document réel disponible pour ce patient.</li>}
+          {!documents.length && <li>Aucun document disponible pour ce patient.</li>}
         </ul>
       )}
     </section>

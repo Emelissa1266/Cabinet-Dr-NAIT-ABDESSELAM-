@@ -302,7 +302,7 @@ export function RealNurseCare({ initialSession }: { initialSession?: string }) {
             )}
           </section>
           {selected && selectedCare ? (
-            <section className={`${styles.panel} ${styles.execution}`} aria-label="Fiche d’exécution réelle">
+            <section className={`${styles.panel} ${styles.execution}`} aria-label="Fiche d’exécution">
               <div className={styles.sectionHeading}>
                 <div>
                   <p className={styles.eyebrow}>Séance de soin</p>

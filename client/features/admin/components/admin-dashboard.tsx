@@ -6,6 +6,7 @@ import { Icon, type IconName } from "@/components/shared/icon";
 import { getDashboard } from "@/features/dashboard/services/dashboard-api-service";
 import type { AdminDashboardApi } from "@/features/dashboard/api-types";
 import { dashboardErrorMessage, money } from "@/features/dashboard/services/dashboard-display";
+import { auditActionLabel, dateTime, entityLabel, personName } from "@/lib/presentation";
 import ui from "@/components/ui/clinical.module.css";
 import { AdminGuard } from "./admin-guard";
 
@@ -87,12 +88,12 @@ export function AdminDashboard() {
         </section>
         {dashboard?.recent_activity.length ? (
           <section className={ui.section}>
-            <h2>Activite recente</h2>
+            <h2>Activité récente</h2>
             <ul className={ui.list}>
               {dashboard.recent_activity.map((item, index) => (
                 <li key={`${item.created_at}-${index}`}>
-                  <strong>{item.action}</strong>
-                  <small>{item.entity_type} - {item.actor || "Système"} - {new Date(item.created_at).toLocaleString("fr-DZ")}</small>
+                  <strong>{auditActionLabel(item.action)}</strong>
+                  <small>{entityLabel(item.entity_type)} · {personName(item.actor)} · {dateTime(item.created_at)}</small>
                 </li>
               ))}
             </ul>

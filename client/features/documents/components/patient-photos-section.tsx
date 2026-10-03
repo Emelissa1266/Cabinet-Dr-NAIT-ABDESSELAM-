@@ -369,7 +369,7 @@ export function PatientPhotosSection({ patient }: { patient: Patient }) {
                 </div>
               </button>
             ))}
-            {!filtered.length && <p className={ui.empty}>Aucun cliché réel pour ce patient.</p>}
+            {!filtered.length && <p className={ui.empty}>Aucun cliché pour ce patient.</p>}
           </div>
           <aside className={workspace.stack}>
             {selected ? (

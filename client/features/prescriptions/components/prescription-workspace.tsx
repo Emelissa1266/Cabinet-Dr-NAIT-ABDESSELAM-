@@ -182,8 +182,8 @@ export function PrescriptionWorkspace() {
                 ? <Link className={ui.action} href={`/patients/${patientPath(selected.patient)}`}>Dossier patient</Link>
                 : <button className={ui.action} disabled>Dossier patient</button>}
               <button className={ui.action} onClick={() => setEditing(selected)}>Modifier</button>
-              <button className={ui.action} disabled title="Impression disponible lors d’une prochaine intégration">Imprimer</button>
-              <button className={ui.action} disabled title="La génération de PDF n’est pas encore activée">Exporter PDF</button>
+              <button className={ui.action} disabled title="Impression indisponible pour le moment">Imprimer</button>
+              <button className={ui.action} disabled title="Export PDF indisponible pour le moment">Exporter PDF</button>
             </div>
           </>
         )}

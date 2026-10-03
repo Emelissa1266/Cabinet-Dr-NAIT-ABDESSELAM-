@@ -89,7 +89,7 @@ export function PhotoLibrary({ initialPatientId }: { initialPatientId?: string }
       </div>
       {error && <p role="alert" className={ui.panel}>{error}</p>}
       {loading ? <p role="status" className={ui.panel}>Chargement de la photothèque…</p> : (
-        selected ? <PatientPhotosSection patient={selected} /> : <section className={ui.panel}><p>Aucun patient réel disponible.</p></section>
+        selected ? <PatientPhotosSection patient={selected} /> : <section className={ui.panel}><p>Aucun patient disponible.</p></section>
       )}
     </div>
   );

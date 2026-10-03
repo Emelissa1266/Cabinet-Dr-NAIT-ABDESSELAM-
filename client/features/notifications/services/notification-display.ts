@@ -21,9 +21,9 @@ export function notificationErrorMessage(cause: unknown) {
   if (cause instanceof ApiError) {
     if (cause.status === 0) return "Connexion au serveur impossible.";
     if (cause.status === 404) return "Notification introuvable ou non accessible.";
-    return `${cause.status} — ${cause.message}`;
+    return cause.message || "Impossible de traiter la notification.";
   }
-  return "La requête notification a échoué.";
+  return "Impossible de traiter la notification.";
 }
 
 export function dateTime(value: string | null | undefined) {
