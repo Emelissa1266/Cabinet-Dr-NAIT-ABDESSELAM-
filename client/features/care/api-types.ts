@@ -40,9 +40,15 @@ export interface CareTypeApi {
 export interface CareApi {
   id: number;
   patient: number;
+  patient_name: string;
+  patient_reference: string;
   care_type: number;
+  care_type_name: string;
+  care_category_name: string;
   prescribed_by: number;
+  prescribed_by_name: string;
   assigned_nurse: number | null;
+  assigned_nurse_name: string;
   consultation: number | null;
   medical_instruction: number | null;
   surgery: number | null;
@@ -64,11 +70,22 @@ export interface CareSessionApi {
   id: number;
   care: number;
   nurse: number;
-  scheduled_at: string;
+  scheduled_at: string | null;
   started_at: string | null;
   completed_at: string | null;
   status: CareSessionStatus;
   notes: string;
+  patient_name: string;
+  patient_reference: string;
+  care_type_name: string;
+  care_category_name: string;
+  care_status: CareStatus;
+  care_start_date: string;
+  care_total_price: string;
+  planned_sessions: number;
+  completed_sessions: number;
+  remaining_sessions: number;
+  progress_percentage: number;
   created_at: string;
   updated_at: string;
 }

@@ -55,7 +55,7 @@ export function dateOnly(value: string | null | undefined) {
 
 export function dateTime(value: string | null | undefined) {
   if (!value) return "Non renseignée";
-  return new Intl.DateTimeFormat("fr-DZ", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  return new Intl.DateTimeFormat("fr-DZ", { dateStyle: "medium", timeStyle: "short", hour12: false }).format(new Date(value));
 }
 
 export function decimalAmount(value: string | null | undefined) {

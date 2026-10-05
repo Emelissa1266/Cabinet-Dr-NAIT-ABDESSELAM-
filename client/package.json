@@ -7,10 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test features/clinic/services/workflows.test.mjs features/nurse/services/session-state.test.mjs features/agenda/services/agenda-form.test.mjs features/patients/services/patient-appointments.test.mjs features/admin/services/admin-working-hours.test.mjs features/dashboard/services/dashboard-view.test.mjs features/documents/services/photo-workflow.test.mjs lib/presentation.test.mjs"
+    "test": "node --test features/clinic/services/workflows.test.mjs features/nurse/services/session-state.test.mjs features/nurse/services/nurse-care-state.test.mjs features/billing/services/billing-display.test.mjs features/agenda/services/agenda-form.test.mjs features/patients/services/patient-appointments.test.mjs features/admin/services/admin-working-hours.test.mjs features/dashboard/services/dashboard-view.test.mjs features/documents/services/photo-workflow.test.mjs lib/presentation.test.mjs"
   },
   "dependencies": {
-    "next": "16.3.5",
+    "next": "^16.3.8",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
@@ -23,5 +23,8 @@
     "eslint-config-next": "16.3.5",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "allowScripts": {
+    "unrs-resolver@1.12.2": true
   }
 }

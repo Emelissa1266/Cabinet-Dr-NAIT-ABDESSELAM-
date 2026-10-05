@@ -9,7 +9,7 @@ import { useAuth } from "@/features/auth/components/auth-provider";
 import { listPatients } from "@/features/patients/services/patient-service";
 import type { Patient } from "@/features/patients/types";
 import ui from "@/components/ui/clinical.module.css";
-import styles from "@/components/ui/module-workspace.module.css";
+import styles from "./real-billing-workspace.module.css";
 import type { BillableServiceApi, InvoiceApi, InvoiceStatus, PaymentApi, PaymentMethod, ReceiptApi } from "../api-types";
 import {
   billingErrorMessage,
@@ -226,7 +226,8 @@ function PaymentForm({ invoice, onDone }: { invoice: InvoiceApi; onDone: () => P
 
 export function RealBillingWorkspace({ initialPatientId, initialInvoiceId, create = false }: { initialPatientId?: string; initialInvoiceId?: string; create?: boolean }) {
   const { user, ready } = useAuth();
-  const canWrite = user?.role === "ADMIN" || user?.role === "SECRETARY";
+  const canManageInvoices = user?.role === "ADMIN" || user?.role === "SECRETARY" || user?.role === "NURSE";
+  const canManagePayments = user?.role === "ADMIN" || user?.role === "SECRETARY";
   const [invoices, setInvoices] = useState<InvoiceApi[]>([]);
   const [invoiceCount, setInvoiceCount] = useState(0);
   const [payments, setPayments] = useState<PaymentApi[]>([]);
@@ -247,15 +248,15 @@ export function RealBillingWorkspace({ initialPatientId, initialInvoiceId, creat
   const load = useCallback(async () => {
     const [invoicePage, patientPage, servicePage] = await Promise.all([
       listInvoices({ page, search: query, status, patient: initialPatientId, ordering: "-issue_date" }),
-      listPatients({ ordering: "last_name" }),
-      listBillableServices({ is_active: true }),
+      canManageInvoices ? listPatients({ ordering: "last_name" }) : Promise.resolve({ count: 0, next: null, previous: null, results: [] }),
+      canManageInvoices ? listBillableServices({ is_active: true }) : Promise.resolve({ count: 0, next: null, previous: null, results: [] }),
     ]);
     setInvoices(invoicePage.results);
     setInvoiceCount(invoicePage.count);
     setPatients(patientPage.results);
     setServices(servicePage.results);
     setSelectedId((current) => invoicePage.results.find((invoice) => invoice.id === current)?.id ?? invoicePage.results[0]?.id ?? null);
-  }, [initialPatientId, page, query, status]);
+  }, [canManageInvoices, initialPatientId, page, query, status]);
 
   const loadFinancials = useCallback(async (invoice: InvoiceApi | null) => {
     if (!invoice) {
@@ -330,10 +331,10 @@ export function RealBillingWorkspace({ initialPatientId, initialInvoiceId, creat
   }
 
   return (
-    <main className={ui.page}>
+    <main className={`${ui.page} ${styles.billingPage}`}>
       <header className={ui.heading}>
-        <div><p className={ui.eyebrow}>Finance cabinet</p><h1 className={ui.title}>Facturation</h1><p className={ui.description}>Factures, paiements, allocations et reçus du cabinet.</p></div>
-        {canWrite && <button className={`${ui.action} ${ui.primary}`} onClick={() => setCreating(true)}>Nouvelle facture</button>}
+        <div><p className={ui.eyebrow}>{user?.role === "NURSE" ? "Facturation des soins" : "Finance cabinet"}</p><h1 className={ui.title}>Facturation</h1><p className={ui.description}>{user?.role === "NURSE" ? "Gestion des factures liées aux soins infirmiers." : "Factures, paiements, allocations et reçus du cabinet."}</p></div>
+        {canManageInvoices && <button className={`${ui.action} ${ui.primary}`} onClick={() => setCreating(true)}>Nouvelle facture</button>}
       </header>
       <ModuleSummary items={[
         { label: "Total émis", value: money(issued.reduce((sum, invoice) => sum + Number(invoice.total), 0).toFixed(2), "DZD") },
@@ -342,22 +343,26 @@ export function RealBillingWorkspace({ initialPatientId, initialInvoiceId, creat
       ]} />
       {error && <p className={ui.panel} role="alert">{error}</p>}
       {message && <p className={ui.panel} role="status">{message}</p>}
-      <div className={ui.toolbar}>
+      <div className={`${ui.toolbar} ${styles.filters}`}>
         <label className={ui.search}>Recherche<input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Facture, patient..." /></label>
         <select value={status} onChange={(event) => { setStatus(event.target.value as InvoiceStatus | ""); setPage(1); }} aria-label="Statut facture">
           {invoiceStatuses.map((item) => <option key={item || "all"} value={item}>{item ? invoiceStatusLabels[item] : "Tous les statuts"}</option>)}
         </select>
       </div>
-      {loading ? <p className={ui.panel} role="status">Chargement de la facturation...</p> : (
-        <div className={ui.toolbar}>
-          <section className={ui.tableScroll}>
-            <table className={ui.table}>
-              <thead><tr><th>Facture</th><th>Patient</th><th>Total</th><th>Payé</th><th>Solde</th><th>Statut</th></tr></thead>
+      {loading ? <p className={ui.panel} role="status">Chargement de la facturation...</p> : error && !invoices.length ? (
+        <p className={ui.panel}>Impossible de charger la facturation.</p>
+      ) : (
+        <div className={styles.billingLayout}>
+          <section className={`${ui.tableScroll} ${styles.invoiceList}`}>
+            <table className={`${ui.table} ${styles.invoiceTable}`}>
+              <thead><tr><th>Facture</th><th>Patient</th><th>Date</th><th>Échéance</th><th>Total</th><th>Payé</th><th>Solde</th><th>Statut</th></tr></thead>
               <tbody>
                 {invoices.map((invoice) => (
                   <tr key={invoice.id} onClick={() => setSelectedId(invoice.id)} aria-selected={invoice.id === selected?.id}>
-                    <td><strong>{invoiceLabel(invoice)}</strong><small>{dateOnly(invoice.issue_date)} · échéance {dateOnly(invoice.due_date)}</small></td>
-                    <td>{invoice.patient_name}<small>{dateOnly(invoice.issue_date)}</small></td>
+                    <td><strong>{invoiceLabel(invoice)}</strong></td>
+                    <td><span>{invoice.patient_name}</span></td>
+                    <td>{dateOnly(invoice.issue_date)}</td>
+                    <td>{dateOnly(invoice.due_date)}</td>
                     <td>{money(invoice.total, invoice.currency)}</td>
                     <td>{money(invoice.paid_amount, invoice.currency)}</td>
                     <td>{money(invoice.remaining_amount, invoice.currency)}</td>
@@ -369,26 +374,25 @@ export function RealBillingWorkspace({ initialPatientId, initialInvoiceId, creat
             {!invoices.length && <p className={ui.empty}>Aucune facture trouvée.</p>}
             <footer className={ui.footer}><span>{invoiceCount} factures</span><div className={ui.actions}><button className={ui.action} disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>Précédent</button><span>{page} / {pages}</span><button className={ui.action} disabled={page >= pages} onClick={() => setPage((value) => Math.min(pages, value + 1))}>Suivant</button></div></footer>
           </section>
-          {selected && <aside className={ui.panel}>
-            <div className={ui.actions}><p className={ui.eyebrow}>Détail facture</p><StatusBadge tone={invoiceTone(selected.status)}>{invoiceStatusLabels[selected.status]}</StatusBadge></div>
-            <h2>{invoiceLabel(selected)}</h2>
-            <p>{selected.patient_name}</p>
-            <dl><dt>Total</dt><dd>{money(selected.total, selected.currency)}</dd><dt>Payé</dt><dd>{money(selected.paid_amount, selected.currency)}</dd><dt>Solde</dt><dd>{money(selected.remaining_amount, selected.currency)}</dd></dl>
+          {selected && <aside className={`${ui.panel} ${styles.invoiceDetail}`}>
+            <div className={styles.detailHeader}><div><p className={ui.eyebrow}>Détail facture</p><h2>{invoiceLabel(selected)}</h2></div><StatusBadge tone={invoiceTone(selected.status)}>{invoiceStatusLabels[selected.status]}</StatusBadge></div>
+            <dl className={styles.metaList}><dt>Patient</dt><dd>{selected.patient_name}</dd><dt>Date</dt><dd>{dateOnly(selected.issue_date)}</dd><dt>Échéance</dt><dd>{dateOnly(selected.due_date)}</dd></dl>
+            <dl className={styles.financialSummary}><div><dt>Total</dt><dd>{money(selected.total, selected.currency)}</dd></div><div><dt>Payé</dt><dd>{money(selected.paid_amount, selected.currency)}</dd></div><div><dt>Solde</dt><dd>{money(selected.remaining_amount, selected.currency)}</dd></div></dl>
             <div className={ui.actions}>
               <Link className={ui.action} href={`/patients/${selected.patient_reference}`}>Dossier patient</Link>
-              {canWrite && selected.status === "DRAFT" && <button className={ui.action} disabled={busy} onClick={() => run(() => issueInvoice(selected.id), "Facture émise.")}>Émettre</button>}
-              {canWrite && !["PAID", "CANCELLED"].includes(selected.status) && selected.status !== "DRAFT" && <button className={`${ui.action} ${ui.primary}`} disabled={busy || selected.remaining_amount === "0.00"} onClick={() => setMessage("")}>Paiement ci-dessous</button>}
-              {canWrite && ["DRAFT", "ISSUED"].includes(selected.status) && <button className={ui.action} disabled={busy} onClick={() => { const reason = window.prompt("Motif d’annulation"); if (reason) void run(() => cancelInvoice(selected.id, reason), "Facture annulée."); }}>Annuler</button>}
+              {canManageInvoices && selected.status === "DRAFT" && <button className={ui.action} disabled={busy} onClick={() => run(() => issueInvoice(selected.id), "Facture émise.")}>Émettre</button>}
+              {canManagePayments && !["PAID", "CANCELLED"].includes(selected.status) && selected.status !== "DRAFT" && <button className={`${ui.action} ${ui.primary}`} disabled={busy || selected.remaining_amount === "0.00"} onClick={() => setMessage("")}>Paiement ci-dessous</button>}
+              {canManagePayments && ["DRAFT", "ISSUED"].includes(selected.status) && <button className={ui.action} disabled={busy} onClick={() => { const reason = window.prompt("Motif d’annulation"); if (reason) void run(() => cancelInvoice(selected.id, reason), "Facture annulée."); }}>Annuler</button>}
             </div>
-            <section className={styles.section}><h3>Lignes</h3>{selected.items.length ? <ul className={styles.list}>{selected.items.map((item) => <li key={item.id}><strong>{item.description}</strong><small>{item.quantity} × {money(item.unit_price, selected.currency)} · remise {money(item.discount_amount, selected.currency)}</small><p>{money(item.net_amount, selected.currency)}</p></li>)}</ul> : <p>Aucune ligne.</p>}</section>
-            {canWrite && selected.status === "DRAFT" && <AddItemForm invoice={selected} services={services} onDone={() => refresh("Ligne ajoutée.")} />}
-            {canWrite && selected.status !== "DRAFT" && selected.status !== "CANCELLED" && selected.remaining_amount !== "0.00" && <section className={styles.section}><h3>Encaissement</h3><PaymentForm invoice={selected} onDone={() => refresh("Paiement enregistré, alloué et comptabilisé.")} /></section>}
-            <section className={styles.section}><h3>Paiements</h3>{payments.filter((payment) => payment.allocations.some((allocation) => allocation.invoice === selected.id)).map((payment) => <p key={payment.id}>{payment.payment_number} · {paymentStatusLabels[payment.status]} · {money(payment.amount, payment.currency)} · {paymentMethodLabels[payment.payment_method]} {canWrite && payment.status !== "CANCELLED" && <button className={styles.link} disabled={busy} onClick={() => { const reason = window.prompt("Motif d’annulation du paiement"); if (reason) void run(() => cancelPayment(payment.id, reason), "Paiement annulé."); }}>Annuler</button>}</p>)}{!payments.some((payment) => payment.allocations.some((allocation) => allocation.invoice === selected.id)) && <p>Aucun paiement alloué.</p>}</section>
-            <section className={styles.section}><h3>Reçus</h3>{receipts.filter((receipt) => receipt.allocations.some((allocation) => allocation.invoice === selected.id)).map((receipt) => <p key={receipt.id}>{receipt.receipt_number} · {dateTime(receipt.issued_at)} · {money(receipt.payment_amount, "DZD")}</p>)}{!receipts.some((receipt) => receipt.allocations.some((allocation) => allocation.invoice === selected.id)) && <p>Aucun reçu.</p>}</section>
+            <section className={styles.section}><h3>Lignes de facture</h3>{selected.items.length ? <ul className={styles.lineList}>{selected.items.map((item) => <li key={item.id}><strong>{item.description}</strong><dl><dt>Quantité</dt><dd>{item.quantity}</dd><dt>Prix unitaire</dt><dd>{money(item.unit_price, selected.currency)}</dd><dt>Remise</dt><dd>{money(item.discount_amount, selected.currency)}</dd><dt>Sous-total</dt><dd>{money(item.net_amount, selected.currency)}</dd></dl></li>)}</ul> : <p>Aucune ligne.</p>}</section>
+            {canManageInvoices && selected.status === "DRAFT" && <AddItemForm invoice={selected} services={services} onDone={() => refresh("Ligne ajoutée.")} />}
+            {canManagePayments && selected.status !== "DRAFT" && selected.status !== "CANCELLED" && selected.remaining_amount !== "0.00" && <section className={styles.section}><h3>Encaissement</h3><PaymentForm invoice={selected} onDone={() => refresh("Paiement enregistré, alloué et comptabilisé.")} /></section>}
+            <section className={styles.section}><h3>Paiements</h3>{payments.filter((payment) => payment.allocations.some((allocation) => allocation.invoice === selected.id)).map((payment) => <p key={payment.id}>{payment.payment_number} · {paymentStatusLabels[payment.status]} · {money(payment.amount, payment.currency)} · {paymentMethodLabels[payment.payment_method]} {canManagePayments && payment.status !== "CANCELLED" && <button className={styles.link} disabled={busy} onClick={() => { const reason = window.prompt("Motif d’annulation du paiement"); if (reason) void run(() => cancelPayment(payment.id, reason), "Paiement annulé."); }}>Annuler</button>}</p>)}{!payments.some((payment) => payment.allocations.some((allocation) => allocation.invoice === selected.id)) && <p>Aucun paiement enregistré.</p>}</section>
+            <section className={styles.section}><h3>Reçus</h3>{receipts.filter((receipt) => receipt.allocations.some((allocation) => allocation.invoice === selected.id)).map((receipt) => <p key={receipt.id}>{receipt.receipt_number} · {dateTime(receipt.issued_at)} · {money(receipt.payment_amount, "DZD")}</p>)}{!receipts.some((receipt) => receipt.allocations.some((allocation) => allocation.invoice === selected.id)) && <p>Aucun reçu disponible.</p>}</section>
           </aside>}
         </div>
       )}
-      <DetailDialog title="Nouvelle facture" open={canWrite && creating} onClose={() => setCreating(false)}>
+      <DetailDialog title="Nouvelle facture" open={canManageInvoices && creating} onClose={() => setCreating(false)}>
         {creating && <RealInvoiceForm patients={patients} services={services} initialPatientId={initialPatientId} onCancel={() => setCreating(false)} onSave={async (id) => { setCreating(false); setSelectedId(id); await refresh("Brouillon de facture créé."); }} />}
       </DetailDialog>
     </main>

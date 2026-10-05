@@ -2,15 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { DetailDialog } from "@/components/ui/detail-dialog";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useAuth } from "@/features/auth/components/auth-provider";
 import {
+  createCare,
+  createCareSession,
   createCareObservation,
   createCareSessionMaterial,
   createCareSessionParameter,
   createClinicalMeasurement,
   completeCareSession,
-  getCare,
+  listCares,
   listCareObservations,
   listCareParameterDefinitions,
   listCareSessionMaterials,
@@ -19,18 +22,17 @@ import {
   listCareTypes,
   listClinicalMeasurements,
   startCareSession,
+  updateCare,
   updateCareSessionParameter,
 } from "@/features/care/services/care-api-service";
 import {
   careErrorMessage,
   careSessionTime,
   careStatusLabels,
-  careType,
-  careTypeName,
   dateOnly,
+  dateTime,
   decimalAmount,
   measurementTypeLabels,
-  patientName,
   sessionStatusLabels,
 } from "@/features/care/services/care-display";
 import type {
@@ -45,21 +47,35 @@ import type {
   ClinicalMeasurementApi,
   ClinicalMeasurementType,
 } from "@/features/care/api-types";
-import { getPatient } from "@/features/patients/services/patient-service";
+import { listPatients } from "@/features/patients/services/patient-service";
 import type { Patient } from "@/features/patients/types";
+import { eligibleSessionCares, mergeById, mergeCreatedSession, replaceById } from "../services/nurse-care-state";
 import ui from "@/components/ui/clinical.module.css";
 import styles from "./nurse.module.css";
 
 const sessionFilters: Array<CareSessionStatus | "TODAY" | "ALL"> = ["TODAY", "PLANNED", "IN_PROGRESS", "COMPLETED", "ALL"];
 const measurementTypes = Object.keys(measurementTypeLabels) as ClinicalMeasurementType[];
+type CareFormMode = "create" | "edit" | null;
 
-function dateKey(value: string) {
+function dateKey(value: string | null) {
+  if (!value) return "";
   return value.slice(0, 10);
 }
 
 function todayKey() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+function localDateTimeInput() {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  return now.toISOString().slice(0, 16);
+}
+
+function toIsoFromLocal(value: FormDataEntryValue | null) {
+  const raw = String(value ?? "").trim();
+  return raw ? new Date(raw).toISOString() : "";
 }
 
 function sessionFilterLabel(value: CareSessionStatus | "TODAY" | "ALL") {
@@ -83,9 +99,15 @@ export function RealNurseCare({ initialSession }: { initialSession?: string }) {
   const [selectedId, setSelectedId] = useState<number | null>(initialSession && /^\d+$/.test(initialSession) ? Number(initialSession) : null);
   const [filter, setFilter] = useState<CareSessionStatus | "TODAY" | "ALL">(initialSession ? "ALL" : "TODAY");
   const [query, setQuery] = useState("");
+  const [careForNewSession, setCareForNewSession] = useState<number | "">("");
+  const [newCareType, setNewCareType] = useState<number | "">("");
+  const [newCarePatient, setNewCarePatient] = useState<number | "">("");
+  const [careFormMode, setCareFormMode] = useState<CareFormMode>(null);
+  const [sessionFormOpen, setSessionFormOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [actionError, setActionError] = useState("");
   const [message, setMessage] = useState("");
   const [observations, setObservations] = useState<CareObservationApi[]>([]);
   const [measurements, setMeasurements] = useState<ClinicalMeasurementApi[]>([]);
@@ -97,7 +119,11 @@ export function RealNurseCare({ initialSession }: { initialSession?: string }) {
   const selected = sessions.find((session) => session.id === selectedId) ?? sessions[0] ?? null;
 
   const careById = useMemo(() => new Map(cares.map((care) => [care.id, care])), [cares]);
-  const patientById = useMemo(() => new Map(patients.map((patient) => [patient.apiId, patient])), [patients]);
+  const activeCares = useMemo(() => eligibleSessionCares(cares), [cares]);
+  const selectedCareForManagement = activeCares.find((care) => care.id === Number(careForNewSession)) ?? activeCares[0] ?? null;
+  const plannedSessions = useMemo(() => sessions.filter((session) => session.status === "PLANNED").length, [sessions]);
+  const inProgressSessions = useMemo(() => sessions.filter((session) => session.status === "IN_PROGRESS").length, [sessions]);
+  const completedToday = useMemo(() => sessions.filter((session) => session.status === "COMPLETED" && dateKey(session.completed_at) === todayKey()).length, [sessions]);
   const visibleSessions = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase("fr");
     return sessions
@@ -109,26 +135,26 @@ export function RealNurseCare({ initialSession }: { initialSession?: string }) {
       .filter((session) => {
         if (!normalizedQuery) return true;
         const care = careById.get(session.care);
-        const patient = care ? patientById.get(care.patient) : undefined;
-        const type = care ? careType(care, careTypes) : undefined;
-        return `${patientName(patient)} ${careTypeName(type)} ${session.notes}`.toLocaleLowerCase("fr").includes(normalizedQuery);
+        return `${session.patient_name} ${session.care_type_name} ${care?.care_category_name ?? ""} ${session.notes}`.toLocaleLowerCase("fr").includes(normalizedQuery);
       });
-  }, [careById, careTypes, filter, patientById, query, sessions]);
+  }, [careById, filter, query, sessions]);
 
   const loadSessions = useCallback(async () => {
-    const [sessionPage, typePage] = await Promise.all([
+    const [sessionPage, carePage, typePage, patientPage] = await Promise.all([
       listCareSessions({ ordering: "scheduled_at" }),
-      listCareTypes({ ordering: "name" }),
+      listCares({ ordering: "-start_date" }),
+      listCareTypes({ is_active: true, ordering: "name" }),
+      listPatients({ isActive: true, ordering: "last_name" }),
     ]);
-    const uniqueCareIds = [...new Set(sessionPage.results.map((session) => session.care))];
-    const careList = await Promise.all(uniqueCareIds.map((id) => getCare(id)));
-    const uniquePatientIds = [...new Set(careList.map((care) => care.patient))];
-    const patientList = await Promise.all(uniquePatientIds.map((id) => getPatient(String(id))));
+    const careById = new Map(carePage.results.map((care) => [care.id, care]));
     setSessions(sessionPage.results);
+    setCares([...careById.values()]);
     setCareTypes(typePage.results);
-    setCares(careList);
-    setPatients(patientList);
+    setPatients(patientPage.results);
     setSelectedId((current) => sessionPage.results.find((session) => session.id === current)?.id ?? sessionPage.results[0]?.id ?? null);
+    setCareForNewSession((current) => current || carePage.results.find((care) => !["COMPLETED", "CANCELLED"].includes(care.status) && care.remaining_sessions > 0)?.id || "");
+    setNewCareType((current) => current || typePage.results[0]?.id || "");
+    setNewCarePatient((current) => current || patientPage.results[0]?.apiId || "");
   }, []);
 
   const loadSelectedRecords = useCallback(async () => {
@@ -162,7 +188,7 @@ export function RealNurseCare({ initialSession }: { initialSession?: string }) {
     const timer = window.setTimeout(() => {
       loadSessions()
         .catch((cause) => {
-          if (active) setError(careErrorMessage(cause));
+          if (active) setLoadError(careErrorMessage(cause));
         })
         .finally(() => {
           if (active) setLoading(false);
@@ -178,7 +204,7 @@ export function RealNurseCare({ initialSession }: { initialSession?: string }) {
     let active = true;
     const timer = window.setTimeout(() => {
       loadSelectedRecords().catch((cause) => {
-        if (active) setError(careErrorMessage(cause));
+        if (active) setLoadError(careErrorMessage(cause));
       });
     }, 0);
     return () => {
@@ -187,17 +213,30 @@ export function RealNurseCare({ initialSession }: { initialSession?: string }) {
     };
   }, [loadSelectedRecords]);
 
-  async function runMutation(action: () => Promise<unknown>, success: string) {
+  async function runMutation<T>(
+    action: () => Promise<T>,
+    success: string,
+    options: {
+      onSuccess?: (result: T) => void;
+      refreshFailure?: string;
+    } = {},
+  ) {
     setBusy(true);
-    setError("");
+    setActionError("");
     setMessage("");
     try {
-      await action();
-      await loadSessions();
-      await loadSelectedRecords();
+      const result = await action();
+      options.onSuccess?.(result);
       setMessage(success);
+      try {
+        await loadSessions();
+        await loadSelectedRecords();
+        setLoadError("");
+      } catch (cause) {
+        setLoadError(options.refreshFailure ?? careErrorMessage(cause));
+      }
     } catch (cause) {
-      setError(careErrorMessage(cause));
+      setActionError(careErrorMessage(cause));
     } finally {
       setBusy(false);
     }
@@ -212,36 +251,109 @@ export function RealNurseCare({ initialSession }: { initialSession?: string }) {
     }, "Observation enregistrée.");
   }
 
+  async function submitNewCare(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    if (!newCarePatient || !newCareType) return;
+    await runMutation(async () => {
+      return createCare({
+        patient: Number(newCarePatient),
+        care_type: Number(newCareType),
+        start_date: String(form.get("start_date") || todayKey()),
+        end_date: String(form.get("end_date") || "") || null,
+        planned_sessions: Number(form.get("planned_sessions") || 1),
+        price_per_session: String(form.get("price_per_session") || "0.00"),
+        notes: String(form.get("notes") ?? "").trim(),
+      });
+    }, "Soin créé.", {
+      onSuccess: (care) => {
+        setCares((current) => mergeById(current, care));
+        setCareForNewSession(care.id);
+        setCareFormMode(null);
+        formElement.reset();
+      },
+      refreshFailure: "Le soin a été créé, mais la liste n’a pas pu être actualisée.",
+    });
+  }
+
+  async function submitCareUpdate(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedCareForManagement) return;
+    const form = new FormData(event.currentTarget);
+    await runMutation(async () => {
+      return updateCare(selectedCareForManagement.id, {
+        planned_sessions: Number(form.get("planned_sessions") || selectedCareForManagement.planned_sessions),
+        price_per_session: String(form.get("price_per_session") || selectedCareForManagement.price_per_session),
+        end_date: String(form.get("end_date") || "") || null,
+        notes: String(form.get("notes") ?? "").trim(),
+      });
+    }, "Soin mis à jour.", {
+      onSuccess: (care) => {
+        setCares((current) => replaceById(current, care));
+        setCareFormMode(null);
+      },
+      refreshFailure: "Le soin a été mis à jour, mais la liste n’a pas pu être actualisée.",
+    });
+  }
+
+  async function submitNewSession(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    if (!careForNewSession) return;
+    await runMutation(async () => {
+      return createCareSession({
+        care: Number(careForNewSession),
+        scheduled_at: toIsoFromLocal(form.get("scheduled_at")),
+        notes: String(form.get("notes") ?? "").trim(),
+      });
+    }, "Séance de soin enregistrée.", {
+      onSuccess: (session) => {
+        setSessions((current) => mergeCreatedSession(current, session));
+        setFilter("ALL");
+        setSelectedId(session.id);
+        setSessionFormOpen(false);
+        formElement.reset();
+      },
+      refreshFailure: "La séance a été enregistrée, mais la liste n’a pas pu être actualisée.",
+    });
+  }
+
   async function submitMeasurement(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selected) return;
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     await runMutation(async () => {
-      await createClinicalMeasurement({
+      return createClinicalMeasurement({
         care_session: selected.id,
         measurement_type: String(form.get("measurement_type")) as ClinicalMeasurementType,
         value: String(form.get("value") ?? "").trim(),
         unit: String(form.get("unit") ?? "").trim(),
         notes: String(form.get("notes") ?? "").trim(),
       });
-      event.currentTarget.reset();
-    }, "Mesure enregistrée.");
+    }, "Mesure enregistrée.", {
+      onSuccess: () => formElement.reset(),
+    });
   }
 
   async function submitMaterial(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selected) return;
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     await runMutation(async () => {
-      await createCareSessionMaterial({
+      return createCareSessionMaterial({
         care_session: selected.id,
         name: String(form.get("name") ?? "").trim(),
         quantity: String(form.get("quantity") ?? "").trim(),
         unit: String(form.get("unit") ?? "").trim(),
         notes: String(form.get("notes") ?? "").trim(),
       });
-      event.currentTarget.reset();
-    }, "Matériel enregistré.");
+    }, "Matériel enregistré.", {
+      onSuccess: () => formElement.reset(),
+    });
   }
 
   async function saveParameters() {
@@ -257,21 +369,22 @@ export function RealNurseCare({ initialSession }: { initialSession?: string }) {
   }
 
   const selectedCare = selected ? careById.get(selected.care) : undefined;
-  const selectedPatient = selectedCare ? patientById.get(selectedCare.patient) : undefined;
-  const selectedCareType = selectedCare ? careType(selectedCare, careTypes) : undefined;
   const editable = selected?.status === "IN_PROGRESS";
 
   return (
     <main className={styles.page}>
       <header className={styles.heading}>
         <div>
-          <p className={styles.eyebrow}>Soins assignés</p>
+          <p className={styles.eyebrow}>Soins infirmiers</p>
           <h1>Soins</h1>
-          <p>Exécution infirmière, paramètres dynamiques et traçabilité clinique.</p>
+          <p>Gestion des soins, séances et traçabilité clinique.</p>
         </div>
-        <span className={styles.dateBadge}>{user?.displayName ?? user?.username ?? "Infirmier(ère)"} · Backend Care</span>
+        <div className={styles.headerActions}>
+          <button className={styles.secondary} onClick={() => setCareFormMode("create")}>Nouveau soin</button>
+          <button className={styles.primary} disabled={!activeCares.length} onClick={() => setSessionFormOpen(true)}>Nouvelle séance</button>
+        </div>
       </header>
-      {error && <p className={styles.error} role="alert">{error}</p>}
+      {(actionError || loadError) && <p className={styles.error} role="alert">{actionError || loadError}</p>}
       {message && <p className={styles.feedback} role="status">{message}</p>}
       <div className={styles.toolbar}>
         <select aria-label="Statut des séances" value={filter} onChange={(event) => setFilter(event.target.value as CareSessionStatus | "TODAY" | "ALL")}>
@@ -279,20 +392,49 @@ export function RealNurseCare({ initialSession }: { initialSession?: string }) {
         </select>
         <input aria-label="Rechercher une séance" placeholder="Patient ou soin..." value={query} onChange={(event) => setQuery(event.target.value)} />
       </div>
+      <div className={styles.summary} aria-label="Résumé des séances">
+        <span>À réaliser <strong>{plannedSessions}</strong></span>
+        <span>En cours <strong>{inProgressSessions}</strong></span>
+        <span>Terminées aujourd’hui <strong>{completedToday}</strong></span>
+      </div>
       {loading ? <p className={styles.panel} role="status">Chargement des séances...</p> : (
-        <div className={styles.columns}>
+        <div className={`${styles.careWorkspace} ${!selected ? styles.careWorkspaceWide : ""}`}>
+          <div className={styles.primaryColumn}>
+            <section className={styles.panel}>
+              <div className={styles.sectionHeading}>
+                <div>
+                  <p className={styles.eyebrow}>Soins et séances</p>
+                  <h2>Plans actifs</h2>
+                </div>
+                {selectedCareForManagement && <button className={styles.secondary} onClick={() => setCareFormMode("edit")}>Modifier</button>}
+              </div>
+              {!activeCares.length ? <p>Aucun soin pour les filtres sélectionnés.</p> : (
+                <div className={styles.careList}>
+                  {activeCares.map((care) => (
+                    <button key={care.id} className={styles.careCard} aria-pressed={care.id === selectedCareForManagement?.id} onClick={() => setCareForNewSession(care.id)}>
+                      <span>
+                        <strong>{care.patient_name}</strong>
+                        <small>{care.care_type_name}</small>
+                      </span>
+                      <span className={styles.careMeta}>
+                        <span>{care.completed_sessions} / {care.planned_sessions} séances</span>
+                        <StatusBadge tone={care.status === "COMPLETED" ? "success" : care.status === "IN_PROGRESS" ? "teal" : "neutral"}>{careStatusLabels[care.status]}</StatusBadge>
+                      </span>
+                      <progress value={care.completed_sessions} max={care.planned_sessions} />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
           <section className={styles.panel}>
-            <h2>Séances autorisées</h2>
-            {!visibleSessions.length ? <p>Aucune séance ne correspond aux filtres.</p> : (
+            <h2>Séances de soin</h2>
+            {loadError && !sessions.length ? <p>Impossible de charger les soins.</p> : !visibleSessions.length ? <p>Aucune séance ne correspond aux filtres.</p> : (
               <div className={styles.sessionList}>
                 {visibleSessions.map((session) => {
-                  const care = careById.get(session.care);
-                  const patient = care ? patientById.get(care.patient) : undefined;
-                  const type = care ? careType(care, careTypes) : undefined;
                   return (
                     <button key={session.id} className={styles.sessionCard} data-active={session.id === selected?.id} onClick={() => setSelectedId(session.id)}>
-                      <strong>{patientName(patient)}</strong>
-                      <span>{careTypeName(type)}</span>
+                      <strong>{session.patient_name}</strong>
+                      <span>{session.care_type_name}</span>
                       <small>{careSessionTime(session)}</small>
                       <StatusBadge tone={session.status === "COMPLETED" ? "success" : session.status === "IN_PROGRESS" ? "teal" : "neutral"}>{sessionStatusLabels[session.status]}</StatusBadge>
                     </button>
@@ -301,37 +443,38 @@ export function RealNurseCare({ initialSession }: { initialSession?: string }) {
               </div>
             )}
           </section>
+          </div>
           {selected && selectedCare ? (
             <section className={`${styles.panel} ${styles.execution}`} aria-label="Fiche d’exécution">
               <div className={styles.sectionHeading}>
                 <div>
                   <p className={styles.eyebrow}>Séance de soin</p>
-                  <h2>{careTypeName(selectedCareType)}</h2>
+                  <h2>{selected.care_type_name}</h2>
                 </div>
                 <StatusBadge tone={selected.status === "COMPLETED" ? "success" : selected.status === "IN_PROGRESS" ? "teal" : "neutral"}>{sessionStatusLabels[selected.status]}</StatusBadge>
               </div>
               <div className={styles.identity}>
-                <span>{selectedPatient?.initials ?? "P"}</span>
+                <span>{selected.patient_name.split(" ").map((part) => part[0]).join("").slice(0, 2) || "P"}</span>
                 <div>
-                  <strong>{patientName(selectedPatient)}</strong>
-                  <p>{dateOnly(selectedCare.start_date)}</p>
-                  <p>{careStatusLabels[selectedCare.status]} · {decimalAmount(selectedCare.total_price)}</p>
+                  <strong>{selected.patient_name}</strong>
+                  <p>{careSessionTime(selected)}</p>
+                  <p>Soin : {careStatusLabels[selected.care_status]} · Séance : {sessionStatusLabels[selected.status]}</p>
                 </div>
               </div>
               <div className={styles.inset}>
-                <p>{careSessionTime(selected)} · {selected.notes || "Aucune note de planification."}</p>
-                <div className={styles.progressLabel}><span>{selectedCare.completed_sessions}/{selectedCare.planned_sessions} séances réalisées</span><strong>{selectedCare.remaining_sessions} restantes</strong></div>
-                <progress value={selectedCare.completed_sessions} max={selectedCare.planned_sessions} />
-                <p>{selectedCare.progress_percentage}% calculé.</p>
+                <p>{selected.notes || "Aucune note de planification."}</p>
+                <div className={styles.progressLabel}><span>{selected.completed_sessions}/{selected.planned_sessions} séances réalisées</span><strong>{selected.remaining_sessions} restantes</strong></div>
+                <progress value={selected.completed_sessions} max={selected.planned_sessions} />
+                <p>{selected.progress_percentage}% · {decimalAmount(selected.care_total_price)}</p>
               </div>
               <div className={styles.inset}>
                 <small>Instructions médicales en lecture seule</small>
-                <p>{selectedCare.notes || selectedCareType?.description || "Aucune instruction renseignée."}</p>
+                <p>{selectedCare.notes || "Aucune instruction renseignée."}</p>
               </div>
               <div className={styles.actions}>
                 {selected.status === "PLANNED" && <button className={styles.primary} disabled={busy} onClick={() => runMutation(() => startCareSession(selected.id), "Séance démarrée.")}>Commencer</button>}
                 {selected.status === "IN_PROGRESS" && <button className={styles.primary} disabled={busy} onClick={() => runMutation(() => completeCareSession(selected.id), "Séance terminée.")}>Terminer</button>}
-                {selectedPatient && <Link href={`/nurse/patients/${selectedPatient.patientReference}`}>Dossier patient</Link>}
+                <Link href={`/nurse/patients/${selected.patient_reference}`}>Dossier patient</Link>
               </div>
               <section>
                 <h3>Paramètres dynamiques</h3>
@@ -357,7 +500,7 @@ export function RealNurseCare({ initialSession }: { initialSession?: string }) {
               <section>
                 <h3>Observations infirmières</h3>
                 {editable && <form className={ui.form} onSubmit={submitObservation}><label>Observation<textarea value={observationText} onChange={(event) => setObservationText(event.target.value)} required /></label><button className={ui.action} disabled={busy || !observationText.trim()}>Ajouter</button></form>}
-                {observations.length ? <ul>{observations.map((item) => <li key={item.id}>{new Date(item.created_at).toLocaleString("fr-DZ")} · {item.observation}</li>)}</ul> : <p>Aucune observation.</p>}
+                {observations.length ? <ul>{observations.map((item) => <li key={item.id}>{dateTime(item.created_at)} · {item.observation}</li>)}</ul> : <p>Aucune observation.</p>}
               </section>
               <section>
                 <h3>Mesures cliniques</h3>
@@ -368,7 +511,7 @@ export function RealNurseCare({ initialSession }: { initialSession?: string }) {
                   <label>Notes<textarea name="notes" /></label>
                   <button className={ui.action} disabled={busy}>Ajouter la mesure</button>
                 </form>}
-                {measurements.length ? <ul>{measurements.map((item) => <li key={item.id}>{measurementTypeLabels[item.measurement_type]} · {item.value} {item.unit} · {new Date(item.recorded_at).toLocaleString("fr-DZ")}</li>)}</ul> : <p>Aucune mesure.</p>}
+                {measurements.length ? <ul>{measurements.map((item) => <li key={item.id}>{measurementTypeLabels[item.measurement_type]} · {item.value} {item.unit} · {dateTime(item.recorded_at)}</li>)}</ul> : <p>Aucune mesure.</p>}
               </section>
               <section>
                 <h3>Matériel utilisé</h3>
@@ -385,6 +528,67 @@ export function RealNurseCare({ initialSession }: { initialSession?: string }) {
           ) : <div className={styles.empty}>Sélectionnez une séance.</div>}
         </div>
       )}
+      <DetailDialog title={careFormMode === "edit" ? "Modifier le soin" : "Nouveau soin"} open={careFormMode !== null} onClose={() => setCareFormMode(null)}>
+        {careFormMode === "create" && (patients.length && careTypes.length ? (
+          <form className={ui.form} onSubmit={submitNewCare}>
+            <div className={styles.modalGrid}>
+              <label>Patient
+                <select value={newCarePatient} onChange={(event) => setNewCarePatient(Number(event.target.value))} required>
+                  {patients.map((patient) => <option key={patient.apiId} value={patient.apiId}>{patient.name}</option>)}
+                </select>
+              </label>
+              <label>Type de soin
+                <select value={newCareType} onChange={(event) => setNewCareType(Number(event.target.value))} required>
+                  {careTypes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+              </label>
+              <label>Début<input name="start_date" type="date" defaultValue={todayKey()} required /></label>
+              <label>Fin<input name="end_date" type="date" /></label>
+              <label>Séances prévues<input name="planned_sessions" type="number" min={1} defaultValue={1} required /></label>
+              <label>Prix par séance<input name="price_per_session" inputMode="decimal" defaultValue={careTypes.find((item) => item.id === Number(newCareType))?.default_price ?? "0.00"} required /></label>
+            </div>
+            <label>Notes<textarea name="notes" /></label>
+            <div className={ui.actions}>
+              <button className={`${ui.action} ${ui.primary}`} disabled={busy || !newCarePatient || !newCareType}>{busy ? "Création..." : "Créer le soin"}</button>
+              <button className={ui.action} type="button" disabled={busy} onClick={() => setCareFormMode(null)}>Annuler</button>
+            </div>
+          </form>
+        ) : <p>Aucun patient ou type de soin disponible.</p>)}
+        {careFormMode === "edit" && selectedCareForManagement && (
+          <form className={ui.form} onSubmit={submitCareUpdate}>
+            <p>{selectedCareForManagement.patient_name} · {selectedCareForManagement.care_type_name}</p>
+            <div className={styles.modalGrid}>
+              <label>Séances prévues<input name="planned_sessions" type="number" min={selectedCareForManagement.completed_sessions} defaultValue={selectedCareForManagement.planned_sessions} required /></label>
+              <label>Prix par séance<input name="price_per_session" inputMode="decimal" defaultValue={selectedCareForManagement.price_per_session} required /></label>
+              <label>Fin<input name="end_date" type="date" defaultValue={selectedCareForManagement.end_date ?? ""} /></label>
+            </div>
+            <label>Notes<textarea name="notes" defaultValue={selectedCareForManagement.notes} /></label>
+            <div className={ui.actions}>
+              <button className={`${ui.action} ${ui.primary}`} disabled={busy}>{busy ? "Enregistrement..." : "Enregistrer les modifications"}</button>
+              <button className={ui.action} type="button" disabled={busy} onClick={() => setCareFormMode(null)}>Annuler</button>
+            </div>
+          </form>
+        )}
+      </DetailDialog>
+      <DetailDialog title="Nouvelle séance" open={sessionFormOpen} onClose={() => setSessionFormOpen(false)}>
+        {activeCares.length ? (
+          <form className={ui.form} onSubmit={submitNewSession}>
+            <label>Soin
+              <select value={careForNewSession} onChange={(event) => setCareForNewSession(Number(event.target.value))} required>
+                {activeCares.map((care) => (
+                  <option key={care.id} value={care.id}>{care.patient_name} · {care.care_type_name} · {care.remaining_sessions} restantes</option>
+                ))}
+              </select>
+            </label>
+            <label>Date et heure<input name="scheduled_at" type="datetime-local" defaultValue={localDateTimeInput()} required /></label>
+            <label>Note de planification<textarea name="notes" /></label>
+            <div className={ui.actions}>
+              <button className={`${ui.action} ${ui.primary}`} disabled={busy || !careForNewSession}>{busy ? "Enregistrement..." : "Enregistrer la séance"}</button>
+              <button className={ui.action} type="button" disabled={busy} onClick={() => setSessionFormOpen(false)}>Annuler</button>
+            </div>
+          </form>
+        ) : <p>Aucun soin disponible pour une nouvelle séance.</p>}
+      </DetailDialog>
     </main>
   );
 }
