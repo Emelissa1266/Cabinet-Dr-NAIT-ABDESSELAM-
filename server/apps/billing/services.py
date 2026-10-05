@@ -69,9 +69,17 @@ def default_item_values_from_source(data: dict) -> dict:
     service = data.get("billable_service")
     care = data.get("care")
     care_session = data.get("care_session")
-    if care_session and not care:
-        care = care_session.care
-        data["care"] = care
+    if care_session:
+        session_care = care_session.care
+        if care and care.pk != session_care.pk:
+            raise ValidationError("Care session must belong to the selected care.")
+        if InvoiceItem.objects.filter(care=session_care).exists():
+            raise ValidationError("Care already has a billing line.")
+        data.setdefault("description", session_care.care_type.name)
+        data.setdefault("quantity", Decimal("1.00"))
+        data.setdefault("unit_price", session_care.price_per_session)
+        data.setdefault("discount_amount", MONEY_ZERO)
+        return data
     if service:
         data.setdefault("description", service.name)
         data.setdefault("unit_price", service.default_unit_price)

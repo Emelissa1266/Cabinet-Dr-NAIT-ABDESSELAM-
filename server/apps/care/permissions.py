@@ -13,6 +13,16 @@ class CareCatalogPermission(BasePermission):
         return user.role in {User.Role.ADMIN, User.Role.DOCTOR}
 
 
+class CareParameterDefinitionPermission(BasePermission):
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated or not user.is_active:
+            return False
+        if request.method in SAFE_METHODS:
+            return user.role in {User.Role.ADMIN, User.Role.DOCTOR, User.Role.NURSE, User.Role.SECRETARY}
+        return user.role in {User.Role.ADMIN, User.Role.DOCTOR}
+
+
 class CarePermission(BasePermission):
     def has_permission(self, request, view):
         user = request.user
@@ -20,7 +30,7 @@ class CarePermission(BasePermission):
             return False
         if request.method in SAFE_METHODS:
             return user.role in {User.Role.ADMIN, User.Role.DOCTOR, User.Role.NURSE}
-        return user.role == User.Role.DOCTOR
+        return user.role in {User.Role.DOCTOR, User.Role.NURSE}
 
 
 class CareSessionPermission(BasePermission):

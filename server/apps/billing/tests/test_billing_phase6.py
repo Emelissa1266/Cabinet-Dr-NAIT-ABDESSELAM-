@@ -394,6 +394,17 @@ def test_financial_rbac_and_nurse_care_visibility(
     api_client.force_authenticate(user=nurse_user)
     nurse_list = api_client.get("/api/v1/invoices/")
     nurse_mutation = api_client.patch(f"/api/v1/invoices/{care_invoice_id}/", {"notes": "Nope"}, format="json")
+    nurse_invoice = api_client.post("/api/v1/invoices/", {"patient": patient.id, "notes": "Nurse draft"}, format="json")
+    nurse_invoice_update = api_client.patch(
+        f"/api/v1/invoices/{nurse_invoice.data['id']}/",
+        {"notes": "Nurse updated draft"},
+        format="json",
+    )
+    nurse_payment = api_client.post(
+        "/api/v1/payments/",
+        {"patient": patient.id, "amount": "1000.00", "payment_method": Payment.Method.CASH},
+        format="json",
+    )
     api_client.force_authenticate(user=admin_user)
     admin_read = api_client.get("/api/v1/invoices/")
 
@@ -401,9 +412,13 @@ def test_financial_rbac_and_nurse_care_visibility(
     assert doctor_mutation.status_code == status.HTTP_403_FORBIDDEN
     assert nurse_list.status_code == status.HTTP_200_OK
     assert [item["id"] for item in nurse_list.data["results"]] == [care_invoice_id]
-    assert nurse_mutation.status_code == status.HTTP_403_FORBIDDEN
-    assert admin_read.data["count"] == 2
+    assert nurse_mutation.status_code == status.HTTP_400_BAD_REQUEST
+    assert nurse_invoice.status_code == status.HTTP_201_CREATED
+    assert nurse_invoice_update.status_code == status.HTTP_200_OK
+    assert nurse_payment.status_code == status.HTTP_403_FORBIDDEN
+    assert admin_read.data["count"] == 3
     assert Invoice.objects.get(pk=care_invoice_id).notes == ""
+    assert Invoice.objects.get(pk=nurse_invoice.data["id"]).notes == "Nurse updated draft"
 
 
 @pytest.mark.django_db

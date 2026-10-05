@@ -11,9 +11,9 @@ from apps.medical.models import Consultation, MedicalInstruction
 from apps.patients.models import Patient
 
 
-def validate_doctor(user):
-    if user and user.role != User.Role.DOCTOR:
-        raise ValidationError("Care prescription author must be a doctor.")
+def validate_care_author(user):
+    if user and user.role not in {User.Role.DOCTOR, User.Role.NURSE}:
+        raise ValidationError("Care author must be a doctor or nurse.")
 
 
 def validate_nurse(user):
@@ -149,7 +149,7 @@ class Care(models.Model):
         return round((self.completed_sessions / self.planned_sessions) * 100, 2)
 
     def clean(self):
-        validate_doctor(self.prescribed_by)
+        validate_care_author(self.prescribed_by)
         if self.assigned_nurse:
             validate_nurse(self.assigned_nurse)
         if self.consultation_id and self.consultation.patient_id != self.patient_id:

@@ -1,6 +1,8 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
+from apps.accounts.models import User
+
 from .models import BillableService, Invoice, InvoiceItem
 from .services import (
     create_invoice,
@@ -54,6 +56,21 @@ class InvoiceItemSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = ("id", "gross_amount", "net_amount", "created_at", "updated_at")
+
+    def validate(self, attrs):
+        request = self.context["request"]
+        user = request.user
+        invoice = attrs.get("invoice") or getattr(self.instance, "invoice", None)
+        care = attrs.get("care") or getattr(self.instance, "care", None)
+        care_session = attrs.get("care_session") or getattr(self.instance, "care_session", None)
+        if user.role == User.Role.NURSE:
+            if not invoice or invoice.created_by_id != user.id:
+                raise serializers.ValidationError("Only invoices created by this nurse can be modified.")
+            if care and care.assigned_nurse_id != user.id:
+                raise serializers.ValidationError("This care is outside the nurse workspace.")
+            if care_session and care_session.nurse_id != user.id:
+                raise serializers.ValidationError("This care session is outside the nurse workspace.")
+        return attrs
 
     def create(self, validated_data):
         try:
@@ -138,6 +155,12 @@ class InvoiceSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
+
+    def validate(self, attrs):
+        user = self.context["request"].user
+        if user.role == User.Role.NURSE and self.instance and self.instance.created_by_id != user.id:
+            raise serializers.ValidationError("Only invoices created by this nurse can be modified.")
+        return attrs
 
     def get_patient_name(self, obj) -> str:
         return f"{obj.patient.first_name} {obj.patient.last_name}".strip()

@@ -12,7 +12,7 @@ from apps.accounts.models import User
 from apps.payments.models import Payment, PaymentAllocation
 
 from .models import MONEY_ZERO, BillableService, Invoice, InvoiceItem
-from .permissions import BillableServicePermission, FinancialPermission
+from .permissions import BillableServicePermission, FinancialPermission, InvoicePermission
 from .serializers import (
     BillableServiceSerializer,
     CancelInvoiceSerializer,
@@ -64,7 +64,7 @@ class BillableServiceViewSet(viewsets.ModelViewSet):
 
 class InvoiceViewSet(viewsets.ModelViewSet):
     serializer_class = InvoiceSerializer
-    permission_classes = [FinancialPermission]
+    permission_classes = [InvoicePermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = {
         "patient": ["exact"],
@@ -92,9 +92,11 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         user = self.request.user
         role = getattr(user, "role", None)
         if role == User.Role.NURSE:
-            queryset = queryset.filter(
-                items__care__assigned_nurse=user,
-            ) | queryset.filter(items__care_session__nurse=user)
+            queryset = (
+                queryset.filter(created_by=user)
+                | queryset.filter(items__care__assigned_nurse=user)
+                | queryset.filter(items__care_session__nurse=user)
+            )
             queryset = queryset.distinct()
         overdue = self.request.query_params.get("overdue")
         if overdue is not None:
@@ -135,7 +137,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 
 class InvoiceItemViewSet(viewsets.ModelViewSet):
     serializer_class = InvoiceItemSerializer
-    permission_classes = [FinancialPermission]
+    permission_classes = [InvoicePermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = (
         "invoice",
@@ -158,8 +160,10 @@ class InvoiceItemViewSet(viewsets.ModelViewSet):
             "care_session",
         )
         if getattr(self.request.user, "role", None) == User.Role.NURSE:
-            queryset = queryset.filter(care__assigned_nurse=self.request.user) | queryset.filter(
-                care_session__nurse=self.request.user,
+            queryset = (
+                queryset.filter(invoice__created_by=self.request.user)
+                | queryset.filter(care__assigned_nurse=self.request.user)
+                | queryset.filter(care_session__nurse=self.request.user)
             )
             queryset = queryset.distinct()
         return queryset

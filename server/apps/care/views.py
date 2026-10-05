@@ -21,6 +21,7 @@ from .models import (
 )
 from .permissions import (
     CareCatalogPermission,
+    CareParameterDefinitionPermission,
     CarePermission,
     CareSessionPermission,
     NursingExecutionPermission,
@@ -141,12 +142,12 @@ class CareViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         if self.request.user.role == User.Role.NURSE:
-            return queryset.filter(assigned_nurse=self.request.user)
+            return queryset.filter(assigned_nurse=self.request.user) | queryset.filter(prescribed_by=self.request.user)
         return queryset
 
 
 class CareSessionViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
-    queryset = CareSession.objects.select_related("care", "care__patient", "care__care_type", "nurse").all()
+    queryset = CareSession.objects.select_related("care", "care__patient", "care__care_type", "care__care_type__category", "nurse").all()
     serializer_class = CareSessionSerializer
     permission_classes = [CareSessionPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -252,7 +253,7 @@ class CareSessionMaterialViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
 class CareParameterDefinitionViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
     queryset = CareParameterDefinition.objects.select_related("care_type").all()
     serializer_class = CareParameterDefinitionSerializer
-    permission_classes = [CareCatalogPermission]
+    permission_classes = [CareParameterDefinitionPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ("care_type", "required", "active", "data_type")
     search_fields = ("key", "label")

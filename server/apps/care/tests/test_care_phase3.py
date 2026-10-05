@@ -6,6 +6,7 @@ from rest_framework import status
 
 from apps.accounts.models import User
 from apps.audit.models import AuditLog
+from apps.billing.models import BillableService, Invoice, InvoiceItem
 from apps.care.models import (
     Care,
     CareCategory,
@@ -171,22 +172,63 @@ def test_nurse_can_read_assigned_care_but_secretary_cannot(api_client, nurse_use
 
 
 @pytest.mark.django_db
-def test_secretary_and_nurse_cannot_prescribe_care(api_client, secretary_user, nurse_user, patient, care_type):
-    for user in (secretary_user, nurse_user):
-        api_client.force_authenticate(user=user)
-        response = api_client.post(
-            "/api/v1/cares/",
-            {
-                "patient": patient.id,
-                "care_type": care_type.id,
-                "start_date": timezone.localdate().isoformat(),
-                "planned_sessions": 1,
-                "price_per_session": "0.00",
-            },
-            format="json",
-        )
-        assert response.status_code == status.HTTP_403_FORBIDDEN
-    assert Care.objects.count() == 0
+def test_nurse_creates_and_updates_care_without_doctor_assignment(api_client, secretary_user, nurse_user, patient, care_type):
+    api_client.force_authenticate(user=nurse_user)
+
+    created = api_client.post(
+        "/api/v1/cares/",
+        {
+            "patient": patient.id,
+            "care_type": care_type.id,
+            "start_date": timezone.localdate().isoformat(),
+            "planned_sessions": 3,
+            "price_per_session": "1500.00",
+            "notes": "Nursing care created independently",
+        },
+        format="json",
+    )
+    tampered = api_client.post(
+        "/api/v1/cares/",
+        {
+            "patient": patient.id,
+            "care_type": care_type.id,
+            "assigned_nurse": secretary_user.id,
+            "start_date": timezone.localdate().isoformat(),
+            "planned_sessions": 1,
+            "price_per_session": "1.00",
+        },
+        format="json",
+    )
+    updated = api_client.patch(
+        f"/api/v1/cares/{created.data['id']}/",
+        {"planned_sessions": 4, "price_per_session": "1750.00", "notes": "Updated by nurse"},
+        format="json",
+    )
+    created_detail = api_client.get(f"/api/v1/cares/{created.data['id']}/")
+    created_list = api_client.get("/api/v1/cares/")
+
+    care = Care.objects.get(pk=created.data["id"])
+    api_client.force_authenticate(user=secretary_user)
+    secretary_read = api_client.get(f"/api/v1/cares/{care.id}/")
+
+    assert created.status_code == status.HTTP_201_CREATED
+    assert created.data["prescribed_by"] == nurse_user.id
+    assert created.data["assigned_nurse"] == nurse_user.id
+    assert created.data["total_price"] == "4500.00"
+    assert tampered.status_code == status.HTTP_400_BAD_REQUEST
+    assert updated.status_code == status.HTTP_200_OK
+    assert updated.data["assigned_nurse"] == nurse_user.id
+    assert updated.data["total_price"] == "7000.00"
+    assert created_detail.status_code == status.HTTP_200_OK
+    assert created_detail.data["id"] == created.data["id"]
+    assert created_detail.data["remaining_sessions"] == 4
+    assert created_list.status_code == status.HTTP_200_OK
+    assert any(item["id"] == created.data["id"] for item in created_list.data["results"])
+    assert secretary_read.status_code == status.HTTP_403_FORBIDDEN
+    assert care.prescribed_by == nurse_user
+    assert care.assigned_nurse == nurse_user
+    assert AuditLog.objects.filter(action="CARE_CREATED", user=nurse_user).count() == 1
+    assert AuditLog.objects.filter(action="CARE_UPDATED", user=nurse_user).count() == 1
 
 
 @pytest.mark.django_db
@@ -207,6 +249,43 @@ def test_nurse_creates_care_session_with_authenticated_nurse(api_client, nurse_u
     assert response.data["nurse"] == nurse_user.id
     assert response.data["status"] == CareSession.Status.PLANNED
     assert CareSession.objects.filter(care=care_plan, nurse=nurse_user).count() == 1
+
+    tampered = api_client.post(
+        "/api/v1/care-sessions/",
+        {
+            "care": care_plan.id,
+            "scheduled_at": timezone.now().isoformat(),
+            "status": CareSession.Status.COMPLETED,
+            "unit_price": "1.00",
+        },
+        format="json",
+    )
+    assert tampered.status_code == status.HTTP_400_BAD_REQUEST
+    assert CareSession.objects.filter(care=care_plan, nurse=nurse_user).count() == 1
+
+
+@pytest.mark.django_db
+def test_nurse_cannot_register_other_nurse_care(api_client, make_user, doctor_user, nurse_user, patient, care_type):
+    other_nurse = make_user(role=User.Role.NURSE, username="assigned-other")
+    other_assigned = Care.objects.create(
+        patient=patient,
+        care_type=care_type,
+        prescribed_by=doctor_user,
+        assigned_nurse=other_nurse,
+        start_date=timezone.localdate(),
+        planned_sessions=1,
+        price_per_session=Decimal("1500.00"),
+    )
+    api_client.force_authenticate(user=nurse_user)
+
+    other_response = api_client.post(
+        "/api/v1/care-sessions/",
+        {"care": other_assigned.id, "scheduled_at": timezone.now().isoformat()},
+        format="json",
+    )
+
+    assert other_response.status_code == status.HTTP_400_BAD_REQUEST
+    assert CareSession.objects.count() == 0
 
 
 @pytest.mark.django_db
@@ -258,6 +337,80 @@ def test_care_session_start_complete_required_parameters_and_progress(
 
 
 @pytest.mark.django_db
+def test_session_completion_does_not_create_invoice_and_nurse_explicitly_bills_care(
+    api_client,
+    admin_user,
+    nurse_user,
+    patient,
+    care_type,
+):
+    care_plan = Care.objects.create(
+        patient=patient,
+        care_type=care_type,
+        prescribed_by=nurse_user,
+        assigned_nurse=nurse_user,
+        start_date=timezone.localdate(),
+        planned_sessions=1,
+        price_per_session=Decimal("2500.00"),
+    )
+    care_session = CareSession.objects.create(care=care_plan, nurse=nurse_user, scheduled_at=timezone.now())
+    care_plan.planned_sessions = 1
+    care_plan.price_per_session = Decimal("2500.00")
+    care_plan.save(update_fields=["planned_sessions", "price_per_session"])
+
+    api_client.force_authenticate(user=admin_user)
+    admin_before = api_client.get("/api/v1/dashboard/").data
+
+    api_client.force_authenticate(user=nurse_user)
+    start = api_client.post(f"/api/v1/care-sessions/{care_session.id}/start/")
+    complete = api_client.post(f"/api/v1/care-sessions/{care_session.id}/complete/")
+    invoices_after_completion = Invoice.objects.count()
+    invoice = api_client.post("/api/v1/invoices/", {"patient": patient.id, "notes": "Nursing invoice"}, format="json")
+    item = api_client.post(
+        "/api/v1/invoice-items/",
+        {"invoice": invoice.data["id"], "care": care_plan.id},
+        format="json",
+    )
+    issue = api_client.post(f"/api/v1/invoices/{invoice.data['id']}/issue/")
+    forbidden_payment = api_client.post(
+        "/api/v1/payments/",
+        {"patient": patient.id, "amount": "2500.00", "payment_method": "CASH"},
+        format="json",
+    )
+
+    invoice_item = InvoiceItem.objects.select_related("invoice").get(pk=item.data["id"])
+    care_session.refresh_from_db()
+    care_plan.refresh_from_db()
+    api_client.force_authenticate(user=admin_user)
+    admin_after = api_client.get("/api/v1/dashboard/").data
+    admin_invoices = api_client.get("/api/v1/invoices/")
+
+    assert start.status_code == status.HTTP_200_OK
+    assert complete.status_code == status.HTTP_200_OK
+    assert invoices_after_completion == 0
+    assert invoice.status_code == status.HTTP_201_CREATED
+    assert item.status_code == status.HTTP_201_CREATED
+    assert issue.status_code == status.HTTP_200_OK
+    assert forbidden_payment.status_code == status.HTTP_403_FORBIDDEN
+    assert Invoice.objects.count() == 1
+    assert InvoiceItem.objects.filter(care=care_plan).count() == 1
+    assert invoice_item.quantity == Decimal("1.00")
+    assert invoice_item.unit_price == Decimal("2500.00")
+    assert invoice_item.net_amount == Decimal("2500.00")
+    assert invoice_item.invoice.patient_id == care_plan.patient_id
+    assert invoice_item.invoice.status == Invoice.Status.ISSUED
+    assert invoice_item.invoice.invoice_number
+    assert care_session.status == CareSession.Status.COMPLETED
+    assert care_plan.status == Care.Status.COMPLETED
+    assert admin_before["pending"]["care_workload_count"] == 1
+    assert admin_after["pending"]["care_workload_count"] == 0
+    assert admin_after["financial"]["outstanding_amount"] == "2500.00"
+    assert any(item["id"] == invoice_item.invoice_id for item in admin_invoices.data["results"])
+    assert AuditLog.objects.filter(action="INVOICE_CREATED", user=nurse_user).count() == 1
+    assert AuditLog.objects.filter(action="INVOICE_ISSUED", user=nurse_user).count() == 1
+
+
+@pytest.mark.django_db
 def test_invalid_session_state_transitions_do_not_modify_state(api_client, nurse_user, care_session):
     api_client.force_authenticate(user=nurse_user)
 
@@ -301,6 +454,44 @@ def test_completed_session_count_marks_care_completed(api_client, nurse_user, ca
     assert care_plan.completed_sessions == 1
     assert care_plan.status == Care.Status.COMPLETED
     assert care_plan.progress_percentage == 100
+
+
+@pytest.mark.django_db
+def test_nurse_can_use_but_not_administer_care_and_billing_catalogs(api_client, nurse_user, care_type):
+    BillableService.objects.create(
+        code="nurse-config-denied",
+        name="Denied service",
+        category=BillableService.Category.CARE,
+        default_unit_price=Decimal("1000.00"),
+    )
+    api_client.force_authenticate(user=nurse_user)
+
+    care_type_response = api_client.get("/api/v1/care-types/")
+    billable_service_response = api_client.get("/api/v1/billable-services/")
+    care_type_write = api_client.post(
+        "/api/v1/care-types/",
+        {
+            "category": care_type.category_id,
+            "name": "Forbidden nurse type",
+            "default_price": "1.00",
+        },
+        format="json",
+    )
+    billable_service_write = api_client.post(
+        "/api/v1/billable-services/",
+        {
+            "code": "forbidden-nurse-service",
+            "name": "Forbidden",
+            "category": BillableService.Category.CARE,
+            "default_unit_price": "1.00",
+        },
+        format="json",
+    )
+
+    assert care_type_response.status_code == status.HTTP_200_OK
+    assert billable_service_response.status_code == status.HTTP_200_OK
+    assert care_type_write.status_code == status.HTTP_403_FORBIDDEN
+    assert billable_service_write.status_code == status.HTTP_403_FORBIDDEN
 
 
 @pytest.mark.django_db
