@@ -32,6 +32,9 @@ import {
   createInvoice,
   createInvoiceItem,
   createPayment,
+  filenameFromDisposition,
+  getInvoicePdf,
+  getInvoicePrintPdf,
   issueInvoice,
   listBillableServices,
   listInvoices,
@@ -323,6 +326,45 @@ export function RealBillingWorkspace({ initialPatientId, initialInvoiceId, creat
     }
   }
 
+  async function downloadPdf(invoice: InvoiceApi) {
+    await run(async () => {
+      const response = await getInvoicePdf(invoice.id);
+      const url = window.URL.createObjectURL(response.blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filenameFromDisposition(
+        response.headers.get("content-disposition"),
+        `${invoice.invoice_number ?? "facture"}.pdf`,
+      );
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    }, "PDF de facture téléchargé.");
+  }
+
+  async function printPdf(invoice: InvoiceApi) {
+    await run(async () => {
+      const response = await getInvoicePrintPdf(invoice.id);
+      const url = window.URL.createObjectURL(response.blob);
+      const frame = document.createElement("iframe");
+      frame.style.position = "fixed";
+      frame.style.width = "1px";
+      frame.style.height = "1px";
+      frame.style.opacity = "0";
+      frame.src = url;
+      document.body.appendChild(frame);
+      frame.onload = () => {
+        frame.contentWindow?.focus();
+        frame.contentWindow?.print();
+        window.setTimeout(() => {
+          frame.remove();
+          window.URL.revokeObjectURL(url);
+        }, 1000);
+      };
+    }, "Document prêt pour impression.");
+  }
+
   const issued = invoices.filter((invoice) => invoice.status !== "DRAFT" && invoice.status !== "CANCELLED");
   const pages = Math.max(1, Math.ceil(invoiceCount / 10));
 
@@ -380,6 +422,8 @@ export function RealBillingWorkspace({ initialPatientId, initialInvoiceId, creat
             <dl className={styles.financialSummary}><div><dt>Total</dt><dd>{money(selected.total, selected.currency)}</dd></div><div><dt>Payé</dt><dd>{money(selected.paid_amount, selected.currency)}</dd></div><div><dt>Solde</dt><dd>{money(selected.remaining_amount, selected.currency)}</dd></div></dl>
             <div className={ui.actions}>
               <Link className={ui.action} href={`/patients/${selected.patient_reference}`}>Dossier patient</Link>
+              {selected.status !== "DRAFT" && <button className={ui.action} disabled={busy} onClick={() => downloadPdf(selected)}>Télécharger PDF</button>}
+              {selected.status !== "DRAFT" && <button className={ui.action} disabled={busy} onClick={() => printPdf(selected)}>Imprimer</button>}
               {canManageInvoices && selected.status === "DRAFT" && <button className={ui.action} disabled={busy} onClick={() => run(() => issueInvoice(selected.id), "Facture émise.")}>Émettre</button>}
               {canManagePayments && !["PAID", "CANCELLED"].includes(selected.status) && selected.status !== "DRAFT" && <button className={`${ui.action} ${ui.primary}`} disabled={busy || selected.remaining_amount === "0.00"} onClick={() => setMessage("")}>Paiement ci-dessous</button>}
               {canManagePayments && ["DRAFT", "ISSUED"].includes(selected.status) && <button className={ui.action} disabled={busy} onClick={() => { const reason = window.prompt("Motif d’annulation"); if (reason) void run(() => cancelInvoice(selected.id, reason), "Facture annulée."); }}>Annuler</button>}

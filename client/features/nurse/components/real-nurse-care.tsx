@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { DetailDialog } from "@/components/ui/detail-dialog";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { useAuth } from "@/features/auth/components/auth-provider";
 import {
   createCare,
   createCareSession,
@@ -29,7 +28,6 @@ import {
   careErrorMessage,
   careSessionTime,
   careStatusLabels,
-  dateOnly,
   dateTime,
   decimalAmount,
   measurementTypeLabels,
@@ -48,6 +46,7 @@ import type {
   ClinicalMeasurementType,
 } from "@/features/care/api-types";
 import { listPatients } from "@/features/patients/services/patient-service";
+import { MedicalAlertsSummary } from "@/features/patients/components/medical-alerts-panel";
 import type { Patient } from "@/features/patients/types";
 import { eligibleSessionCares, mergeById, mergeCreatedSession, replaceById } from "../services/nurse-care-state";
 import ui from "@/components/ui/clinical.module.css";
@@ -91,7 +90,6 @@ function parameterInputType(definition: CareParameterDefinitionApi) {
 }
 
 export function RealNurseCare({ initialSession }: { initialSession?: string }) {
-  const { user } = useAuth();
   const [sessions, setSessions] = useState<CareSessionApi[]>([]);
   const [cares, setCares] = useState<CareApi[]>([]);
   const [careTypes, setCareTypes] = useState<CareTypeApi[]>([]);
@@ -461,6 +459,7 @@ export function RealNurseCare({ initialSession }: { initialSession?: string }) {
                   <p>Soin : {careStatusLabels[selected.care_status]} · Séance : {sessionStatusLabels[selected.status]}</p>
                 </div>
               </div>
+              <MedicalAlertsSummary patientId={selectedCare.patient} />
               <div className={styles.inset}>
                 <p>{selected.notes || "Aucune note de planification."}</p>
                 <div className={styles.progressLabel}><span>{selected.completed_sessions}/{selected.planned_sessions} séances réalisées</span><strong>{selected.remaining_sessions} restantes</strong></div>

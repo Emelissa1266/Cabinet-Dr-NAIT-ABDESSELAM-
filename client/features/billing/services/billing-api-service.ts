@@ -1,4 +1,4 @@
-import { apiRequest } from "@/lib/api-client";
+import { apiBlobRequest, apiRequest } from "@/lib/api-client";
 import { queryString } from "@/features/medical/services/query";
 import type {
   BillableServiceApi,
@@ -47,6 +47,19 @@ export function issueInvoice(id: number | string) {
 
 export function cancelInvoice(id: number | string, reason: string) {
   return apiRequest<InvoiceApi>(`invoices/${id}/cancel/`, { method: "POST", body: { reason } });
+}
+
+export function getInvoicePdf(id: number | string) {
+  return apiBlobRequest(`invoices/${id}/pdf/`);
+}
+
+export function getInvoicePrintPdf(id: number | string) {
+  return apiBlobRequest(`invoices/${id}/print/`);
+}
+
+export function filenameFromDisposition(disposition: string | null, fallback: string) {
+  const match = disposition?.match(/filename="?([^";]+)"?/i);
+  return match?.[1] || fallback;
 }
 
 export function createInvoiceItem(payload: CreateInvoiceItemPayload) {

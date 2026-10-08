@@ -13,6 +13,7 @@ import { PatientDocumentsSection } from "@/features/documents/components/patient
 import { PatientPhotosSection } from "@/features/documents/components/patient-photos-section";
 import { PatientSurgerySection } from "@/features/interventions/components/patient-surgery-section";
 import { PatientPhase9ESections } from "@/features/medical/components/patient-phase-9e-sections";
+import { MedicalAlertsPanel, MedicalAlertsSummary } from "./medical-alerts-panel";
 import { PatientAppointmentsSection } from "./patient-appointments-section";
 import type { Patient } from "../types";
 import { deletePatient, getPatient, updatePatient } from "../services/patient-service";
@@ -50,6 +51,7 @@ export function PatientDetail({ id, basePath = "/patients" }: { id: string; base
   const canReadBilling = user?.role === "ADMIN" || user?.role === "SECRETARY" || user?.role === "DOCTOR" || user?.role === "NURSE";
   const canReadDocuments = user?.role === "ADMIN" || user?.role === "DOCTOR" || user?.role === "NURSE" || user?.role === "SECRETARY";
   const canReadPhotos = user?.role === "ADMIN" || user?.role === "DOCTOR" || user?.role === "NURSE";
+  const canReadMedicalAlerts = user?.role === "ADMIN" || user?.role === "DOCTOR" || user?.role === "NURSE";
   const show = (name: string) => tab === "Vue générale" || tab === name;
 
   const load = useCallback(async () => {
@@ -113,12 +115,13 @@ export function PatientDetail({ id, basePath = "/patients" }: { id: string; base
       {feedback && <p className={ui.panel} role="status">{feedback}</p>}
       <header className={styles.header}>
         <div className={styles.identity}><span className={ui.avatar}>{patient.initials}</span><div><div className={styles.name}><h1>{patient.name}</h1><StatusBadge tone={patient.isActive ? "teal" : "neutral"}>{patient.status}</StatusBadge></div><p>{patient.patientReference}{patient.age !== null ? ` · ${patient.age} ans` : ""} · Né(e) le {formatDate(patient.dateOfBirth)}</p></div><div className={ui.actions}><Link href="/agenda" className={ui.action}>Rendez-vous</Link><button className={`${ui.action} ${ui.primary}`} onClick={() => { setFieldErrorState({}); setFeedback(""); setEditing(true); }}>Modifier</button>{canDelete && <button className={ui.action} onClick={() => setDeleting(true)}>Supprimer</button>}</div></div>
+        {canReadMedicalAlerts && <MedicalAlertsSummary patientId={patient.apiId} compact />}
         <div className={styles.tabs} role="tablist" aria-label="Sections du dossier patient">{tabs.map((name, index) => <button id={`patient-tab-${index}`} key={name} role="tab" aria-selected={tab === name} aria-controls="patient-section" tabIndex={tab === name ? 0 : -1} onKeyDown={(event) => { if (event.key === "ArrowRight" || event.key === "ArrowLeft") { event.preventDefault(); const next = (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length; setTab(tabs[next]); document.getElementById(`patient-tab-${next}`)?.focus(); } }} onClick={() => setTab(name)}>{name}</button>)}</div>
       </header>
       <div id="patient-section" role="tabpanel" aria-labelledby={`patient-tab-${tabs.indexOf(tab)}`} className={styles.columns}>
         <div className={styles.stack}>
           {show("Médical") && <section className={ui.panel}><h2>Informations essentielles</h2><dl className={styles.info}><dt>Téléphone</dt><dd>{patient.phone || "Non renseigné"}</dd><dt>Email personnel</dt><dd>{patient.email || "Non renseigné"}</dd><dt>Date de naissance</dt><dd>{formatDate(patient.dateOfBirth)}</dd><dt>Ville</dt><dd>{patient.city || "Non renseignée"}</dd><dt>Profession</dt><dd>{patient.profession || "Non renseignée"}</dd><dt>Contact d’urgence</dt><dd>{patient.emergencyContact || "Non renseigné"} {patient.emergencyPhone}</dd></dl></section>}
-          {show("Médical") && <section className={ui.panel}><h2>Alertes médicales</h2>{medical ? <><div className={styles.warning}><h3>Allergies</h3>{medical.allergies.length ? medical.allergies.map((item) => <p key={item.id}>{item.title}{item.severity ? ` · ${item.severity}` : ""} — {item.description || "Sans description"}</p>) : <p>Aucune allergie active renseignée.</p>}</div><div className={styles.inset}><h3>Antécédents</h3>{medical.medical_history.length ? medical.medical_history.map((item) => <p key={item.id}>{item.title} — {item.description || "Sans description"}</p>) : <p>Aucun antécédent actif renseigné.</p>}</div></> : <p>Informations médicales non disponibles pour votre rôle.</p>}</section>}
+          {show("Médical") && (canReadMedicalAlerts ? <MedicalAlertsPanel patient={patient} /> : <section className={ui.panel}><h2>Alertes médicales</h2><p>Informations médicales non disponibles pour votre rôle.</p></section>)}
           {show("Photos") && canReadPhotos && <PatientPhotosSection patient={patient} />}
           {tab === "Photos" && !canReadPhotos && <section className={ui.panel}><h2>Photothèque clinique</h2><p>Les photos cliniques ne sont pas disponibles pour votre rôle.</p></section>}
         </div>

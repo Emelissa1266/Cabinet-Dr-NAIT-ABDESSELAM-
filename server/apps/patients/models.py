@@ -123,6 +123,57 @@ class PatientContraindication(PatientMedicalInfoBase):
     pass
 
 
+class MedicalAlert(models.Model):
+    class Category(models.TextChoices):
+        ALLERGY = "ALLERGY", "Allergy"
+        MEDICATION = "MEDICATION", "Medication"
+        CONTRAINDICATION = "CONTRAINDICATION", "Contraindication"
+        MEDICAL_CONDITION = "MEDICAL_CONDITION", "Medical condition"
+        ANESTHESIA = "ANESTHESIA", "Anesthesia"
+        OTHER = "OTHER", "Other"
+
+    class Severity(models.TextChoices):
+        INFO = "INFO", "Information"
+        WARNING = "WARNING", "Warning"
+        CRITICAL = "CRITICAL", "Critical"
+
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="medical_alerts")
+    category = models.CharField(max_length=40, choices=Category.choices)
+    severity = models.CharField(max_length=20, choices=Severity.choices, default=Severity.WARNING)
+    title = models.CharField(max_length=180)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="medical_alerts_created",
+    )
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="medical_alerts_resolved",
+    )
+    resolved_at = models.DateTimeField(blank=True, null=True)
+    resolution_note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-is_active", "-severity", "-created_at")
+        indexes = [
+            models.Index(fields=("patient", "is_active")),
+            models.Index(fields=("severity", "is_active")),
+            models.Index(fields=("category",)),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.patient.patient_reference} - {self.title}"
+
+
 class PatientClinicalNote(models.Model):
     patient = models.ForeignKey(
         Patient,

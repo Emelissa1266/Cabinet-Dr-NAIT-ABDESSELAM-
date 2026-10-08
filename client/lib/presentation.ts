@@ -81,6 +81,11 @@ export const auditActionLabels: Record<string, string> = {
   INVOICE_ISSUED: "Facture émise",
   INVOICE_CANCELLED: "Facture annulée",
   INVOICE_DISCOUNT_CHANGED: "Remise de facture modifiée",
+  INVOICE_PDF_DOWNLOADED: "PDF de facture téléchargé",
+  INVOICE_PRINT_VIEWED: "Facture ouverte pour impression",
+  MEDICAL_ALERT_CREATED: "Alerte médicale créée",
+  MEDICAL_ALERT_UPDATED: "Alerte médicale modifiée",
+  MEDICAL_ALERT_RESOLVED: "Alerte médicale résolue",
   NOTIFICATION_MARKED_READ: "Notification marquée comme lue",
   NOTIFICATION_MARKED_UNREAD: "Notification marquée comme non lue",
   NOTIFICATIONS_MARKED_ALL_READ: "Notifications marquées comme lues",
@@ -125,6 +130,7 @@ export const entityLabels: Record<string, string> = {
   InterventionType: "Type d’intervention",
   Invoice: "Facture",
   InvoiceItem: "Ligne de facture",
+  MedicalAlert: "Alerte médicale",
   Notification: "Notification",
   Patient: "Patient",
   Payment: "Paiement",
@@ -168,4 +174,29 @@ export function dateTime(value: string | null | undefined) {
 
 export function safeErrorMessage(fallback: string) {
   return fallback;
+}
+
+export const medicalAlertCategoryLabels: Record<string, string> = {
+  ALLERGY: "Allergie",
+  MEDICATION: "Médicament",
+  CONTRAINDICATION: "Contre-indication",
+  MEDICAL_CONDITION: "Condition médicale",
+  ANESTHESIA: "Anesthésie",
+  OTHER: "Autre",
+};
+
+export const medicalAlertSeverityLabels: Record<string, string> = {
+  INFO: "Information",
+  WARNING: "Attention",
+  CRITICAL: "Critique",
+};
+
+export function medicalAlertCategoryLabel(value: string | null | undefined) {
+  if (!value) return "Alerte";
+  return medicalAlertCategoryLabels[value] ?? "Alerte";
+}
+
+export function medicalAlertSeverityLabel(value: string | null | undefined) {
+  if (!value) return "Information";
+  return medicalAlertSeverityLabels[value] ?? "Information";
 }

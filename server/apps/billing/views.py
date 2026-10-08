@@ -1,5 +1,6 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Sum
+from django.http import HttpResponse
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -9,9 +10,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.models import User
+from apps.audit.services import record_audit_event
 from apps.payments.models import Payment, PaymentAllocation
 
 from .models import MONEY_ZERO, BillableService, Invoice, InvoiceItem
+from .pdf import render_invoice_pdf
 from .permissions import BillableServicePermission, FinancialPermission, InvoicePermission
 from .serializers import (
     BillableServiceSerializer,
@@ -130,6 +133,31 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         except DjangoValidationError as error:
             return Response(drf_validation(error), status=status.HTTP_400_BAD_REQUEST)
         return Response(self.get_serializer(invoice).data)
+
+    def _pdf_response(self, *, inline: bool):
+        invoice = self.get_object()
+        pdf = render_invoice_pdf(invoice)
+        filename = f"{invoice.invoice_number or 'facture-brouillon'}.pdf"
+        response = HttpResponse(pdf, content_type="application/pdf")
+        disposition = "inline" if inline else "attachment"
+        response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+        record_audit_event(
+            user=self.request.user,
+            action="INVOICE_PRINT_VIEWED" if inline else "INVOICE_PDF_DOWNLOADED",
+            entity_type="Invoice",
+            entity_id=invoice.pk,
+            new_data={"invoice_number": invoice.invoice_number, "total": str(invoice.total)},
+            request=self.request,
+        )
+        return response
+
+    @action(detail=True, methods=["get"], url_path="pdf")
+    def pdf(self, request, pk=None):
+        return self._pdf_response(inline=False)
+
+    @action(detail=True, methods=["get"], url_path="print")
+    def print_pdf(self, request, pk=None):
+        return self._pdf_response(inline=True)
 
     def destroy(self, request, *args, **kwargs):
         return Response({"detail": "Invoices are cancelled, not deleted."}, status=status.HTTP_405_METHOD_NOT_ALLOWED)

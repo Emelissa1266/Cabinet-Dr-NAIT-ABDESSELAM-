@@ -1,6 +1,7 @@
 from django.contrib import admin
 
 from .models import (
+    MedicalAlert,
     Patient,
     PatientAllergy,
     PatientChronicCondition,
@@ -53,6 +54,13 @@ class PatientClinicalNoteInline(admin.TabularInline):
     readonly_fields = ("created_at",)
 
 
+class MedicalAlertInline(admin.TabularInline):
+    model = MedicalAlert
+    extra = 0
+    fields = ("category", "severity", "title", "is_active", "created_by", "resolved_at")
+    readonly_fields = ("resolved_at",)
+
+
 @admin.register(Patient)
 class PatientAdmin(admin.ModelAdmin):
     list_display = (
@@ -74,6 +82,7 @@ class PatientAdmin(admin.ModelAdmin):
         PatientChronicConditionInline,
         PatientMedicationInline,
         PatientContraindicationInline,
+        MedicalAlertInline,
         PatientClinicalNoteInline,
     )
 
@@ -85,3 +94,11 @@ admin.site.register(PatientChronicCondition)
 admin.site.register(PatientMedication)
 admin.site.register(PatientContraindication)
 admin.site.register(PatientClinicalNote)
+
+
+@admin.register(MedicalAlert)
+class MedicalAlertAdmin(admin.ModelAdmin):
+    list_display = ("patient", "category", "severity", "title", "is_active", "created_by", "resolved_at")
+    list_filter = ("category", "severity", "is_active")
+    search_fields = ("patient__patient_reference", "patient__first_name", "patient__last_name", "title", "description")
+    readonly_fields = ("created_at", "updated_at", "resolved_at")

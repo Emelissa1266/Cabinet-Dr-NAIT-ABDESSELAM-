@@ -2,6 +2,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from .models import (
+    MedicalAlert,
     Patient,
     PatientAllergy,
     PatientChronicCondition,
@@ -153,3 +154,49 @@ class PatientClinicalNoteSerializer(serializers.ModelSerializer):
     class Meta:
         model = PatientClinicalNote
         fields = "__all__"
+
+
+class MedicalAlertSerializer(serializers.ModelSerializer):
+    patient_name = serializers.SerializerMethodField()
+    created_by_name = serializers.CharField(source="created_by.get_full_name", read_only=True)
+    resolved_by_name = serializers.CharField(source="resolved_by.get_full_name", read_only=True)
+
+    class Meta:
+        model = MedicalAlert
+        fields = (
+            "id",
+            "patient",
+            "patient_name",
+            "category",
+            "severity",
+            "title",
+            "description",
+            "is_active",
+            "created_by",
+            "created_by_name",
+            "resolved_by",
+            "resolved_by_name",
+            "resolved_at",
+            "resolution_note",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = (
+            "id",
+            "patient_name",
+            "created_by",
+            "created_by_name",
+            "resolved_by",
+            "resolved_by_name",
+            "resolved_at",
+            "created_at",
+            "updated_at",
+        )
+
+    def get_patient_name(self, obj) -> str:
+        return f"{obj.patient.first_name} {obj.patient.last_name}".strip()
+
+    def validate(self, attrs):
+        if self.instance and "patient" in attrs and attrs["patient"] != self.instance.patient:
+            raise serializers.ValidationError({"patient": "Medical alert patient cannot be changed."})
+        return attrs

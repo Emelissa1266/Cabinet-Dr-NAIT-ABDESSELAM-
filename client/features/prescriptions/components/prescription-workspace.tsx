@@ -9,6 +9,7 @@ import { listConsultations } from "@/features/medical/services/consultation-serv
 import { medicalErrorMessage } from "@/features/medical/services/medical-errors";
 import type { Consultation } from "@/features/medical/types";
 import { listPatients } from "@/features/patients/services/patient-service";
+import { MedicalAlertsSummary } from "@/features/patients/components/medical-alerts-panel";
 import type { Patient } from "@/features/patients/types";
 import type { Prescription, PrescriptionPayload, PrescriptionStatus } from "../types";
 import { prescriptionService } from "../services/prescription-service";
@@ -159,6 +160,7 @@ export function PrescriptionWorkspace() {
             <h3>{patientName(selected.patient)}</h3>
             <p>{formatDateTime(selected.prescribed_at)} · {user?.displayName || user?.username || "Praticien"}</p>
             <StatusBadge tone={statusTones[selected.status]}>{statusLabels[selected.status]}</StatusBadge>
+            <MedicalAlertsSummary patientId={selected.patient} />
             <section className={styles.section}>
               <h3>Prescription</h3>
               <ol className={styles.list}>
