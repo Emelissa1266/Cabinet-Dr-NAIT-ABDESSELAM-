@@ -18,7 +18,12 @@ from .models import (
     Document,
     DocumentCategory,
 )
-from .permissions import ClinicalPhotoPermission, DocumentCategoryPermission, DocumentPermission
+from .permissions import (
+    ClinicalPhotoPermission,
+    DocumentCategoryPermission,
+    DocumentPermission,
+    filter_nurse_care_relevant_patients,
+)
 from .serializers import (
     ArchiveSerializer,
     ClinicalPhotoComparisonSerializer,
@@ -44,6 +49,9 @@ def secure_file_response(*, field_file, filename: str, mime_type: str, inline: b
         filename=sanitize_filename(filename),
     )
     response["X-Content-Type-Options"] = "nosniff"
+    response["Cache-Control"] = "no-store, private"
+    response["Pragma"] = "no-cache"
+    response["Referrer-Policy"] = "no-referrer"
     return response
 
 
@@ -196,7 +204,10 @@ class ClinicalPhotoSetViewSet(viewsets.ModelViewSet):
     ordering = ("-captured_at", "-created_at")
 
     def get_queryset(self):
-        return ClinicalPhotoSet.objects.select_related("patient", "surgery", "consultation", "created_by")
+        queryset = ClinicalPhotoSet.objects.select_related("patient", "surgery", "consultation", "created_by")
+        if getattr(self.request.user, "role", None) == User.Role.NURSE:
+            queryset = filter_nurse_care_relevant_patients(queryset, self.request.user)
+        return queryset
 
 
 class ClinicalPhotoViewSet(viewsets.ModelViewSet):
@@ -230,6 +241,8 @@ class ClinicalPhotoViewSet(viewsets.ModelViewSet):
         )
         if "is_archived" not in self.request.query_params and self.action not in {"retrieve", "archive", "download", "view"}:
             queryset = queryset.filter(is_archived=False)
+        if getattr(self.request.user, "role", None) == User.Role.NURSE:
+            queryset = filter_nurse_care_relevant_patients(queryset, self.request.user)
         return queryset
 
     @action(detail=True, methods=["post"])
@@ -289,4 +302,6 @@ class ClinicalPhotoComparisonViewSet(viewsets.ModelViewSet):
             "after_photo",
             "created_by",
         )
+        if getattr(self.request.user, "role", None) == User.Role.NURSE:
+            queryset = filter_nurse_care_relevant_patients(queryset, self.request.user)
         return queryset

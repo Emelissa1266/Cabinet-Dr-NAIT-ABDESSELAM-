@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { DetailDialog } from "@/components/ui/detail-dialog";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { useAuth } from "@/features/auth/components/auth-provider";
 import {
   createCare,
   createCareSession,
@@ -29,7 +28,6 @@ import {
   careErrorMessage,
   careSessionTime,
   careStatusLabels,
-  dateOnly,
   dateTime,
   decimalAmount,
   measurementTypeLabels,
@@ -91,7 +89,6 @@ function parameterInputType(definition: CareParameterDefinitionApi) {
 }
 
 export function RealNurseCare({ initialSession }: { initialSession?: string }) {
-  const { user } = useAuth();
   const [sessions, setSessions] = useState<CareSessionApi[]>([]);
   const [cares, setCares] = useState<CareApi[]>([]);
   const [careTypes, setCareTypes] = useState<CareTypeApi[]>([]);

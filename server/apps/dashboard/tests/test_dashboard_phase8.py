@@ -147,7 +147,12 @@ def test_doctor_dashboard_counts_assigned_appointments_and_excludes_other_doctor
     assert data["upcoming"]["postoperative_followups_count"] == 1
     assert data["pending"]["active_care_count"] == 1
     assert data["upcoming"]["appointments"][0]["patient_name"] == "Dash Patient"
-    assert str(cancelled.id) not in str(data)
+    returned_appointment_ids = {
+        appointment["id"]
+        for group in (data["today"]["appointments"], data["upcoming"]["appointments"])
+        for appointment in group
+    }
+    assert cancelled.id not in returned_appointment_ids
     assert "sensitive operative note" not in str(data)
 
 

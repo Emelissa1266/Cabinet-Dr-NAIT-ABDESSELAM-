@@ -16,7 +16,10 @@ function loadTs(relative) {
   }).outputText;
   const mod = { exports: {} };
   new Function("require", "module", "exports", source)(
-    (id) => id.startsWith(".") ? loadTs(path.resolve(path.dirname(filename), id.endsWith(".ts") ? id : `${id}.ts`)) : require(id),
+    (id) => {
+      if (id === "@/lib/api-client") return { ApiError: class ApiError extends Error {} };
+      return id.startsWith(".") ? loadTs(path.resolve(path.dirname(filename), id.endsWith(".ts") ? id : `${id}.ts`)) : require(id);
+    },
     mod,
     mod.exports,
   );

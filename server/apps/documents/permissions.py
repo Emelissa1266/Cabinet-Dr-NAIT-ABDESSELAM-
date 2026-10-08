@@ -1,3 +1,4 @@
+from django.db.models import Q
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 
 from apps.accounts.models import User
@@ -5,9 +6,33 @@ from apps.accounts.models import User
 from .models import DocumentCategory
 
 
+def nurse_care_patient_query(user) -> Q:
+    return (
+        Q(patient__cares__assigned_nurse=user)
+        | Q(patient__cares__prescribed_by=user)
+        | Q(patient__cares__sessions__nurse=user)
+    )
+
+
+def filter_nurse_care_relevant_patients(queryset, user):
+    return queryset.filter(nurse_care_patient_query(user)).distinct()
+
+
+def is_patient_care_relevant(user, patient_id) -> bool:
+    if not patient_id:
+        return False
+    from apps.care.models import Care
+
+    return (
+        Care.objects.filter(patient_id=patient_id)
+        .filter(Q(assigned_nurse=user) | Q(prescribed_by=user) | Q(sessions__nurse=user))
+        .exists()
+    )
+
+
 def is_care_relevant(user, obj) -> bool:
     care = getattr(obj, "care", None)
-    if care and care.assigned_nurse_id == user.id:
+    if care and (care.assigned_nurse_id == user.id or care.prescribed_by_id == user.id):
         return True
     care_session = getattr(obj, "care_session", None)
     return bool(care_session and care_session.nurse_id == user.id)
@@ -64,4 +89,8 @@ class ClinicalPhotoPermission(BasePermission):
 
     def has_object_permission(self, request, view, obj):
         user = request.user
-        return user.role in {User.Role.ADMIN, User.Role.DOCTOR, User.Role.NURSE}
+        if user.role in {User.Role.ADMIN, User.Role.DOCTOR}:
+            return True
+        if user.role == User.Role.NURSE:
+            return is_patient_care_relevant(user, getattr(obj, "patient_id", None))
+        return False
