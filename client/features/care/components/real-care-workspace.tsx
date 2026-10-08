@@ -11,6 +11,7 @@ import type { Consultation } from "@/features/medical/types";
 import { listPatients } from "@/features/patients/services/patient-service";
 import type { Patient } from "@/features/patients/types";
 import ui from "@/components/ui/clinical.module.css";
+import styles from "@/features/nurse/components/nurse.module.css";
 import type { CareApi, CareCategoryApi, CareStatus, CareTypeApi, CreateCarePayload, UpdateCarePayload } from "../api-types";
 import {
   careErrorMessage,
@@ -257,85 +258,136 @@ export function RealCareWorkspace() {
   const selectedType = selected ? careType(selected, careTypes) : undefined;
   const selectedPatient = selected ? carePatient(selected, patients) : undefined;
   const selectedNurse = staff.find((member) => member.id === selected?.assigned_nurse);
+  const plannedCount = cares.filter((care) => care.status === "PLANNED").length;
+  const inProgressCount = cares.filter((care) => care.status === "IN_PROGRESS").length;
+  const completedCount = cares.filter((care) => care.status === "COMPLETED").length;
 
   return (
-    <main className={ui.page}>
-      <header className={ui.heading}>
+    <main className={styles.page}>
+      <header className={styles.heading}>
         <div>
-          <p className={ui.eyebrow}>Soins infirmiers</p>
-          <h1 className={ui.title}>Plans de soins</h1>
-          <p className={ui.description}>Prescription médicale, affectation infirmière, progression et séances planifiées.</p>
+          <p className={styles.eyebrow}>Soins infirmiers</p>
+          <h1>Soins</h1>
+          <p>Prescription médicale, affectation infirmière, progression et séances planifiées.</p>
         </div>
-        <div className={ui.actions}>
-          <button className={`${ui.action} ${ui.primary}`} onClick={() => setEditing("new")}>Nouveau soin</button>
+        <div className={styles.headerActions}>
+          <button className={styles.primary} onClick={() => setEditing("new")}>Nouveau soin</button>
         </div>
       </header>
-      {feedback && <p className={ui.panel} role="status">{feedback}</p>}
-      {error && <p className={ui.panel} role="alert">{error}</p>}
-      <section className={ui.toolbar}>
-        <label className={ui.search}>Recherche<input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Patient, note, type de soin..." /></label>
+      {error && <p className={styles.error} role="alert">{error}</p>}
+      {feedback && <p className={styles.feedback} role="status">{feedback}</p>}
+      <div className={styles.toolbar}>
         <select aria-label="Statut du soin" value={status} onChange={(event) => { setStatus(event.target.value as CareStatus | ""); setPage(1); }}>
           {statuses.map((item) => <option key={item || "all"} value={item}>{item ? careStatusLabels[item] : "Tous les statuts"}</option>)}
         </select>
-      </section>
-      {loading ? <p className={ui.panel} role="status">Chargement des soins...</p> : (
-        <div className={ui.toolbar}>
-          <section className={ui.tableScroll} aria-label="Plans de soins">
-            <table className={ui.table}>
-              <thead><tr><th>Patient</th><th>Soin</th><th>Statut</th><th>Progression</th><th>Prix</th></tr></thead>
-              <tbody>
+        <input aria-label="Rechercher un soin" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Patient, note, type de soin..." />
+      </div>
+      <div className={styles.summary} aria-label="Résumé des soins">
+        <span>Planifiés <strong>{plannedCount}</strong></span>
+        <span>En cours <strong>{inProgressCount}</strong></span>
+        <span>Terminés <strong>{completedCount}</strong></span>
+      </div>
+      {loading ? <p className={styles.panel} role="status">Chargement des soins...</p> : (
+        <div className={`${styles.careWorkspace} ${!selected ? styles.careWorkspaceWide : ""}`}>
+          <section className={styles.panel} aria-label="Plans de soins">
+            <div className={styles.sectionHeading}>
+              <div>
+                <p className={styles.eyebrow}>Plans de soins</p>
+                <h2>Suivi prescrit</h2>
+              </div>
+              <span className={styles.muted}>{careCount} plans de soins</span>
+            </div>
+            {!cares.length ? <p className={styles.empty}>Aucun plan de soin ne correspond aux filtres.</p> : (
+              <div className={styles.careList}>
                 {cares.map((care) => {
                   const patient = carePatient(care, patients);
                   const type = careType(care, careTypes);
+                  const category = type ? categories.find((item) => item.id === type.category)?.name : "";
                   return (
-                    <tr key={care.id} onClick={() => setSelected(care)} aria-selected={selected?.id === care.id}>
-                      <td><strong>{patientName(patient)}</strong><small>Début {dateOnly(care.start_date)}</small></td>
-                      <td>{careTypeName(type)}<small>{type ? categories.find((category) => category.id === type.category)?.name : ""}</small></td>
-                      <td><StatusBadge tone={care.status === "COMPLETED" ? "success" : care.status === "IN_PROGRESS" ? "teal" : "neutral"}>{careStatusLabels[care.status]}</StatusBadge></td>
-                      <td>{care.completed_sessions}/{care.planned_sessions}<small>{care.remaining_sessions} restantes · {care.progress_percentage}%</small></td>
-                      <td>{decimalAmount(care.total_price)}<small>{decimalAmount(care.price_per_session)} / séance</small></td>
-                    </tr>
+                    <button key={care.id} className={styles.careCard} aria-pressed={selected?.id === care.id} onClick={() => setSelected(care)}>
+                      <span>
+                        <strong>{patientName(patient)}</strong>
+                        <small>{careTypeName(type)}{category ? ` · ${category}` : ""}</small>
+                      </span>
+                      <span className={styles.careMeta}>
+                        <span>Début {dateOnly(care.start_date)}</span>
+                        <StatusBadge tone={care.status === "COMPLETED" ? "success" : care.status === "IN_PROGRESS" ? "teal" : "neutral"}>{careStatusLabels[care.status]}</StatusBadge>
+                      </span>
+                      <div className={styles.progressLabel}>
+                        <span>{care.completed_sessions} / {care.planned_sessions} séances réalisées</span>
+                        <strong>{care.remaining_sessions} restantes</strong>
+                      </div>
+                      <progress value={care.completed_sessions} max={care.planned_sessions} />
+                      <small>{care.progress_percentage}% · {decimalAmount(care.total_price)} · {decimalAmount(care.price_per_session)} / séance</small>
+                    </button>
                   );
                 })}
-              </tbody>
-            </table>
-            {!cares.length && <p className={ui.empty}>Aucun plan de soin ne correspond aux filtres.</p>}
-            <footer className={ui.footer}>
-              <span>{careCount} plans de soins</span>
-              <div className={ui.actions}>
-                <button className={ui.action} disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>Précédent</button>
-                <span>Page {page} / {pages}</span>
-                <button className={ui.action} disabled={page >= pages} onClick={() => setPage((value) => Math.min(pages, value + 1))}>Suivant</button>
               </div>
+            )}
+            <footer className={styles.actions}>
+              <button className={styles.secondary} disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>Précédent</button>
+              <span className={styles.muted}>Page {page} / {pages}</span>
+              <button className={styles.secondary} disabled={page >= pages} onClick={() => setPage((value) => Math.min(pages, value + 1))}>Suivant</button>
             </footer>
           </section>
-          <aside className={ui.panel}>
+          {selected ? (
+          <aside className={`${styles.panel} ${styles.execution}`} aria-label="Détail du plan de soin">
             {selected ? (
               <>
-                <h2>{careTypeName(selectedType)}</h2>
-                <p>{patientName(selectedPatient)} · Infirmier(ère) : {staffName(selectedNurse)}</p>
-                <dl>
-                  <dt>Début</dt><dd>{dateOnly(selected.start_date)}</dd>
-                  <dt>Fin</dt><dd>{dateOnly(selected.end_date)}</dd>
-                  <dt>Séances</dt><dd>{selected.completed_sessions}/{selected.planned_sessions} réalisées · {selected.remaining_sessions} restantes</dd>
-                  <dt>Progression</dt><dd>{selected.progress_percentage}%</dd>
-                  <dt>Total</dt><dd>{decimalAmount(selected.total_price)}</dd>
-                  <dt>Consultation</dt><dd>{selected.consultation ? "Consultation liée au plan" : "Non liée"}</dd>
-                </dl>
-                <p>{selected.notes || "Aucune note médicale renseignée."}</p>
-                <div className={ui.actions}>
-                  <button className={ui.action} onClick={() => setEditing(selected)}>Modifier</button>
-                  {selectedPatient && <Link className={ui.action} href={`/patients/${selectedPatient.patientReference}`}>Dossier patient</Link>}
+                <div className={styles.sectionHeading}>
+                  <div>
+                    <p className={styles.eyebrow}>Plan de soin</p>
+                    <h2>{careTypeName(selectedType)}</h2>
+                  </div>
+                  <StatusBadge tone={selected.status === "COMPLETED" ? "success" : selected.status === "IN_PROGRESS" ? "teal" : "neutral"}>{careStatusLabels[selected.status]}</StatusBadge>
                 </div>
-                <h3>Séances</h3>
-                {busyDetail ? <p role="status">Chargement des séances...</p> : sessions.length ? (
-                  <ul>
-                    {sessions.map((session, index) => <li key={session.id}>Séance {index + 1} · {careSessionTime(session)} · {sessionStatusLabels[session.status]}</li>)}
-                  </ul>
-                ) : <p>Aucune séance planifiée pour ce soin.</p>}
+                <div className={styles.identity}>
+                  <span>{patientName(selectedPatient).split(" ").map((part) => part[0]).join("").slice(0, 2) || "P"}</span>
+                  <div>
+                    <strong>{patientName(selectedPatient)}</strong>
+                    <p>Infirmier(ère) : {staffName(selectedNurse)}</p>
+                    <p>{dateOnly(selected.start_date)} → {dateOnly(selected.end_date)}</p>
+                  </div>
+                </div>
+                <div className={styles.inset}>
+                  <div className={styles.progressLabel}>
+                    <span>{selected.completed_sessions}/{selected.planned_sessions} séances réalisées</span>
+                    <strong>{selected.remaining_sessions} restantes</strong>
+                  </div>
+                  <progress value={selected.completed_sessions} max={selected.planned_sessions} />
+                  <p>{selected.progress_percentage}% · {decimalAmount(selected.total_price)}</p>
+                </div>
+                <div className={styles.inset}>
+                  <small>Instructions médicales</small>
+                  <p>{selected.notes || "Aucune note médicale renseignée."}</p>
+                </div>
+                <div className={styles.inset}>
+                  <small>Informations administratives</small>
+                  <p>Consultation : {selected.consultation ? "Consultation liée au plan" : "Non liée"}</p>
+                  <p>Prix par séance : {decimalAmount(selected.price_per_session)}</p>
+                </div>
+                <div className={styles.actions}>
+                  <button className={styles.secondary} onClick={() => setEditing(selected)}>Modifier</button>
+                  {selectedPatient && <Link className={styles.secondary} href={`/patients/${selectedPatient.patientReference}`}>Dossier patient</Link>}
+                </div>
+                <section>
+                  <h3>Séances</h3>
+                  {busyDetail ? <p role="status">Chargement des séances...</p> : sessions.length ? (
+                    <div className={styles.sessionList}>
+                      {sessions.map((session, index) => (
+                        <article key={session.id} className={styles.sessionCard}>
+                          <strong>Séance {index + 1}</strong>
+                          <span>{careSessionTime(session)}</span>
+                          <StatusBadge tone={session.status === "COMPLETED" ? "success" : session.status === "IN_PROGRESS" ? "teal" : "neutral"}>{sessionStatusLabels[session.status]}</StatusBadge>
+                        </article>
+                      ))}
+                    </div>
+                  ) : <p>Aucune séance planifiée pour ce soin.</p>}
+                </section>
               </>
-            ) : <p>Sélectionnez un plan de soin.</p>}
+            ) : null}
           </aside>
+          ) : null}
         </div>
       )}
       <DetailDialog title={editing === "new" ? "Nouveau plan de soin" : "Modifier le plan de soin"} open={Boolean(editing)} onClose={() => setEditing(null)}>

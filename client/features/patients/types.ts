@@ -24,6 +24,36 @@ export interface PatientMedicalInformation {
   clinical_notes: { id: number; note: string; created_at: string }[];
 }
 
+export type MedicalAlertCategory = "ALLERGY" | "MEDICATION" | "CONTRAINDICATION" | "MEDICAL_CONDITION" | "ANESTHESIA" | "OTHER";
+export type MedicalAlertSeverity = "INFO" | "WARNING" | "CRITICAL";
+
+export interface MedicalAlert {
+  id: number;
+  patient: number;
+  patient_name: string;
+  category: MedicalAlertCategory;
+  severity: MedicalAlertSeverity;
+  title: string;
+  description: string;
+  is_active: boolean;
+  created_by: number | null;
+  created_by_name: string;
+  resolved_by: number | null;
+  resolved_by_name: string;
+  resolved_at: string | null;
+  resolution_note: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MedicalAlertPayload {
+  patient: number;
+  category: MedicalAlertCategory;
+  severity: MedicalAlertSeverity;
+  title: string;
+  description?: string;
+}
+
 export interface BackendPatient {
   id: number;
   patient_reference: string;

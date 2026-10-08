@@ -31,10 +31,13 @@ const {
   auditActionLabel,
   dateTime,
   entityLabel,
+  medicalAlertCategoryLabel,
+  medicalAlertSeverityLabel,
   personName,
   roleLabel,
   statusLabel,
 } = load("lib/presentation.ts");
+const { filenameFromDisposition } = load("features/billing/services/billing-api-service.ts");
 const {
   anesthesiaEvaluationStatusLabels,
   anesthesiaLabels,
@@ -114,4 +117,24 @@ test("placeholder, null and date values render safely", () => {
   assert.equal(personName("undefined undefined"), "Système");
   assert.equal(personName(null), "Système");
   assert.match(dateTime("2026-10-02T16:50:24.152703+01:00"), /2026|oct/i);
+});
+
+test("medical alert labels hide raw backend enum values", () => {
+  const rendered = [
+    medicalAlertCategoryLabel("ALLERGY"),
+    medicalAlertCategoryLabel("MEDICAL_CONDITION"),
+    medicalAlertSeverityLabel("CRITICAL"),
+    medicalAlertSeverityLabel("WARNING"),
+  ].join(" ");
+  assert.doesNotMatch(rendered, /ALLERGY|MEDICAL_CONDITION|CRITICAL|WARNING/);
+  assert.equal(medicalAlertCategoryLabel("ALLERGY"), "Allergie");
+  assert.equal(medicalAlertSeverityLabel("CRITICAL"), "Critique");
+});
+
+test("invoice pdf helpers use backend blob filenames and shared endpoints", () => {
+  assert.equal(filenameFromDisposition('attachment; filename="INV-2026-000004.pdf"', "facture.pdf"), "INV-2026-000004.pdf");
+  const source = fs.readFileSync(path.resolve(root, "features/billing/components/real-billing-workspace.tsx"), "utf8");
+  assert.match(source, /getInvoicePdf/);
+  assert.match(source, /getInvoicePrintPdf/);
+  assert.doesNotMatch(source, /Cabinet Dr NAIT ABDESSELAM|Chirurgie Esthétique|Chirurgie Esthetique/);
 });

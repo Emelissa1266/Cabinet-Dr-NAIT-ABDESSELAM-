@@ -10,6 +10,7 @@ import type { AgendaStaff } from "@/features/agenda/types";
 import { listConsultations } from "@/features/medical/services/consultation-service";
 import type { Consultation } from "@/features/medical/types";
 import { getPatient, listPatients } from "@/features/patients/services/patient-service";
+import { MedicalAlertsSummary } from "@/features/patients/components/medical-alerts-panel";
 import type { Patient } from "@/features/patients/types";
 import { roleLabel } from "@/lib/presentation";
 import ui from "@/components/ui/clinical.module.css";
@@ -688,6 +689,7 @@ export function RealSurgeryWorkspace() {
               <h2>{surgeryLabel(selected)}</h2>
               <p>{patientName(selectedPatient)} · {staffName(selectedSurgeon)}</p>
               {selectedPatient && <Link href={`/patients/${selectedPatient.patientReference}`} className={styles.record}>Dossier patient</Link>}
+              <MedicalAlertsSummary patientId={selected.patient} />
               <div className={styles.path}><span>Brouillon</span><span>Planifiée</span><strong>Pré-op</strong><span>Bloc</span><span>Post-op</span></div>
               <dl className={styles.details}>
                 <dt>Date planifiée</dt><dd>{dateTime(selected.planned_date)}</dd>

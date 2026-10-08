@@ -10,7 +10,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import ts from "typescript";
 
 function loadTs(relative) {
-  const filename = path.resolve(__dirname, relative);
+  let filename = path.resolve(__dirname, relative);
+  if (!path.extname(filename)) {
+    filename += ".ts";
+  }
   const source = ts.transpileModule(fs.readFileSync(filename, "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
   }).outputText;
