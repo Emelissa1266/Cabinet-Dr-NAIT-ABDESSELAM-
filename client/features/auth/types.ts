@@ -14,7 +14,7 @@ export interface AuthUser {
   displayName: string;
 }
 export interface LoginCredentials { username: string; password: string }
-export interface LoginResponse { access: string; refresh: string; user: AuthUser; role: Role }
+export interface LoginResponse { user: AuthUser; role: Role }
 export interface AuthService {
   login(credentials: LoginCredentials): Promise<LoginResponse>;
   me(): Promise<AuthUser>;

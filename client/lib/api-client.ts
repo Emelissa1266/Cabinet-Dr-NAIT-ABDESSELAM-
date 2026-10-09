@@ -1,4 +1,4 @@
-import { notifyAuthExpired, tokenStorage } from "./token-storage";
+import { notifyAuthExpired } from "./token-storage";
 
 export type ApiBody = BodyInit | object | null;
 
@@ -29,7 +29,9 @@ export class ApiError extends Error {
 
 const defaultBaseUrl = "http://127.0.0.1:8000/api/v1";
 const apiBaseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL ?? defaultBaseUrl).replace(/\/+$/, "");
-let refreshPromise: Promise<string | null> | null = null;
+const csrfCookieName = process.env.NEXT_PUBLIC_CSRF_COOKIE_NAME ?? "clinic_csrftoken";
+let csrfPromise: Promise<string | null> | null = null;
+let refreshPromise: Promise<boolean> | null = null;
 
 function endpoint(path: string) {
   return `${apiBaseUrl}/${path.replace(/^\/+/, "")}`;
@@ -40,6 +42,18 @@ function isBodyInit(body: ApiBody): body is BodyInit {
     || typeof Blob !== "undefined" && body instanceof Blob
     || typeof URLSearchParams !== "undefined" && body instanceof URLSearchParams
     || typeof body === "string";
+}
+
+function isSafeMethod(method?: string) {
+  return !method || ["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase());
+}
+
+function readCookie(name: string) {
+  if (typeof document === "undefined") return null;
+  const cookies = document.cookie ? document.cookie.split("; ") : [];
+  const match = cookies.find((cookie) => cookie.startsWith(`${encodeURIComponent(name)}=`));
+  if (!match) return null;
+  return decodeURIComponent(match.slice(name.length + 1));
 }
 
 function jsonMessage(data: unknown, fallback: string) {
@@ -59,6 +73,38 @@ async function readResponse(response: Response) {
   return response.text();
 }
 
+async function ensureCsrfToken() {
+  const existing = readCookie(csrfCookieName);
+  if (existing) return existing;
+  if (!csrfPromise) {
+    csrfPromise = fetch(endpoint("auth/csrf/"), {
+      method: "GET",
+      credentials: "include",
+      headers: { Accept: "application/json" },
+    })
+      .then(async (response) => {
+        const data = await readResponse(response);
+        if (!response.ok) throw new ApiError(jsonMessage(data, "Session de sécurité indisponible."), response.status, data);
+        const cookieToken = readCookie(csrfCookieName);
+        if (cookieToken) return cookieToken;
+        if (typeof data === "object" && data !== null && "csrfToken" in data && typeof data.csrfToken === "string") {
+          return data.csrfToken;
+        }
+        return null;
+      })
+      .finally(() => {
+        csrfPromise = null;
+      });
+  }
+  return csrfPromise;
+}
+
+async function attachCsrfHeader(headers: Headers, method?: string) {
+  if (isSafeMethod(method) || headers.has("X-CSRFToken")) return;
+  const csrfToken = await ensureCsrfToken();
+  if (csrfToken) headers.set("X-CSRFToken", csrfToken);
+}
+
 async function authorizedFetch(
   path: string,
   init: RequestInit,
@@ -66,12 +112,12 @@ async function authorizedFetch(
   retryOnUnauthorized: boolean,
 ) {
   const requestHeaders = new Headers(init.headers);
-  const tokens = tokenStorage.read();
-  if (auth && tokens?.access) requestHeaders.set("Authorization", `Bearer ${tokens.access}`);
+  await attachCsrfHeader(requestHeaders, init.method);
+  const requestInit = { ...init, credentials: "include" as RequestCredentials, headers: requestHeaders };
 
   let response: Response;
   try {
-    response = await fetch(endpoint(path), { ...init, headers: requestHeaders });
+    response = await fetch(endpoint(path), requestInit);
   } catch (error) {
     throw new ApiError(
       error instanceof Error ? error.message : "Connexion au serveur impossible.",
@@ -80,40 +126,33 @@ async function authorizedFetch(
     );
   }
 
-  if (response.status === 401 && auth && retryOnUnauthorized) {
-    const access = await refreshAccessToken();
-    if (access) {
-      requestHeaders.set("Authorization", `Bearer ${access}`);
-      response = await fetch(endpoint(path), { ...init, headers: requestHeaders });
-    }
+  if (response.status === 401 && auth && retryOnUnauthorized && isSafeMethod(init.method)) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed) response = await fetch(endpoint(path), requestInit);
   }
 
   return response;
 }
 
 async function refreshAccessToken() {
-  const tokens = tokenStorage.read();
-  if (!tokens?.refresh) return null;
   if (!refreshPromise) {
-    refreshPromise = fetch(endpoint("auth/refresh/"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ refresh: tokens.refresh }),
-    })
+    refreshPromise = ensureCsrfToken()
+      .then((csrfToken) => fetch(endpoint("auth/refresh/"), {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          Accept: "application/json",
+          ...(csrfToken ? { "X-CSRFToken": csrfToken } : {}),
+        },
+      }))
       .then(async (response) => {
         const data = await readResponse(response);
         if (!response.ok) throw new ApiError(jsonMessage(data, "Session expirée."), response.status, data);
-        if (typeof data !== "object" || data === null || !("access" in data) || typeof data.access !== "string") {
-          throw new ApiError("Réponse de rafraîchissement invalide.", response.status, data);
-        }
-        const rotatedRefresh = "refresh" in data && typeof data.refresh === "string" ? data.refresh : undefined;
-        tokenStorage.updateTokens(data.access, rotatedRefresh);
-        return data.access;
+        return true;
       })
       .catch(() => {
-        tokenStorage.clear();
         notifyAuthExpired();
-        return null;
+        return false;
       })
       .finally(() => {
         refreshPromise = null;

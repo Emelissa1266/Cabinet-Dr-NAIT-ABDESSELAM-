@@ -31,6 +31,11 @@ def day_bounds(day=None):
     return start, end
 
 
+def upcoming_lower_bound(now):
+    _, today_end = day_bounds()
+    return max(now, today_end)
+
+
 def money(value):
     return f"{(value or MONEY_ZERO):.2f}"
 
@@ -119,10 +124,11 @@ def financial_summary():
 def doctor_dashboard(user):
     now = timezone.now()
     today_start, today_end = day_bounds()
+    upcoming_start = upcoming_lower_bound(now)
     horizon = now + timezone.timedelta(days=settings.DASHBOARD_UPCOMING_DAYS)
     appointments = appointment_staff_queryset(user)
     today_appointments = active_appointments(appointments.filter(start_at__gte=today_start, start_at__lt=today_end))
-    upcoming_appointments = active_appointments(appointments.filter(start_at__gt=now, start_at__lt=horizon))
+    upcoming_appointments = active_appointments(appointments.filter(start_at__gte=upcoming_start, start_at__lt=horizon))
     upcoming_surgeries = Surgery.objects.filter(
         surgeon=user,
         planned_date__gt=now,
@@ -162,13 +168,14 @@ def doctor_dashboard(user):
 def nurse_dashboard(user):
     now = timezone.now()
     today_start, today_end = day_bounds()
+    upcoming_start = upcoming_lower_bound(now)
     horizon = now + timezone.timedelta(days=settings.DASHBOARD_UPCOMING_DAYS)
     appointments = appointment_staff_queryset(user)
     today_appointments = active_appointments(appointments.filter(start_at__gte=today_start, start_at__lt=today_end))
-    upcoming_appointments = active_appointments(appointments.filter(start_at__gt=now, start_at__lt=horizon))
+    upcoming_appointments = active_appointments(appointments.filter(start_at__gte=upcoming_start, start_at__lt=horizon))
     sessions = CareSession.objects.select_related("care", "care__patient", "care__care_type").filter(nurse=user)
     today_sessions = sessions.filter(scheduled_at__gte=today_start, scheduled_at__lt=today_end)
-    upcoming_sessions = sessions.filter(scheduled_at__gt=now, scheduled_at__lt=horizon).exclude(status__in=CARE_SESSION_TERMINAL_STATUSES)
+    upcoming_sessions = sessions.filter(scheduled_at__gte=upcoming_start, scheduled_at__lt=horizon).exclude(status__in=CARE_SESSION_TERMINAL_STATUSES)
     completed_today = sessions.filter(status=CareSession.Status.COMPLETED).filter(
         Q(completed_at__gte=today_start, completed_at__lt=today_end)
         | Q(completed_at__isnull=True, scheduled_at__gte=today_start, scheduled_at__lt=today_end),
@@ -202,9 +209,10 @@ def nurse_dashboard(user):
 def secretary_dashboard(user):
     now = timezone.now()
     today_start, today_end = day_bounds()
+    upcoming_start = upcoming_lower_bound(now)
     horizon = now + timezone.timedelta(days=settings.DASHBOARD_UPCOMING_DAYS)
     today_appointments = Appointment.objects.filter(start_at__gte=today_start, start_at__lt=today_end)
-    upcoming_appointments = active_appointments(Appointment.objects.filter(start_at__gt=now, start_at__lt=horizon))
+    upcoming_appointments = active_appointments(Appointment.objects.filter(start_at__gte=upcoming_start, start_at__lt=horizon))
     active_today = active_appointments(today_appointments)
     return {
         "role": user.role,

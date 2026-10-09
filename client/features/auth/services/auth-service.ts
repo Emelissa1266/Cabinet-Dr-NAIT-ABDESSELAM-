@@ -1,6 +1,5 @@
 import type { AuthService } from "../types";
 import { apiRequest } from "@/lib/api-client";
-import { tokenStorage } from "@/lib/token-storage";
 import { mapUser } from "./user-mapper";
 
 export const authService: AuthService = {
@@ -11,17 +10,14 @@ export const authService: AuthService = {
       auth: false,
       retryOnUnauthorized: false,
     });
-    return { access: response.access, refresh: response.refresh, user: mapUser(response.user), role: response.user.role };
+    return { user: mapUser(response.user), role: response.user.role };
   },
   async me() {
     return mapUser(await apiRequest<BackendUser>("auth/me/"));
   },
   async logout() {
-    const refresh = tokenStorage.read()?.refresh;
-    if (!refresh) return;
     await apiRequest<void>("auth/logout/", {
       method: "POST",
-      body: { refresh },
     });
   },
 };
@@ -40,7 +36,5 @@ export interface BackendUser {
 }
 
 interface BackendLoginResponse {
-  access: string;
-  refresh: string;
   user: BackendUser;
 }

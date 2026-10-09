@@ -24,10 +24,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
   const reloadUser = useCallback(async () => {
-    if (!tokenStorage.read()) {
-      setUser(null);
-      return;
-    }
     setUser(await authService.me());
   }, []);
   useEffect(() => {
@@ -47,11 +43,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setReady(true);
     };
     window.addEventListener("clinic-auth-expired", expire);
-    window.addEventListener("storage", restore);
     return () => {
       active = false;
       window.removeEventListener("clinic-auth-expired", expire);
-      window.removeEventListener("storage", restore);
     };
   }, [clearSession, reloadUser]);
   const logout = useCallback(async () => {
@@ -61,10 +55,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [clearSession]);
   async function login(credentials: LoginCredentials, remember: boolean) {
     setError("");
+    void remember;
     try {
       const response = await authService.login(credentials);
-      tokenStorage.save({ access: response.access, refresh: response.refresh }, remember);
-      setUser(await authService.me());
+      tokenStorage.clear();
+      setUser(response.user);
     } catch (cause) {
       clearSession();
       if (cause instanceof ApiError && cause.status === 401) throw new Error("Nom d’utilisateur ou mot de passe incorrect.");
