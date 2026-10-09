@@ -90,6 +90,19 @@ def upload_photo(api_client, user, patient, **overrides):
     return api_client.post("/api/v1/clinical-photos/", payload, format="multipart")
 
 
+def assign_nurse_care(patient, nurse_user):
+    category = CareCategory.objects.create(name=f"Post-op care {patient.id}")
+    care_type = CareType.objects.create(category=category, name="Dressing")
+    return Care.objects.create(
+        patient=patient,
+        care_type=care_type,
+        prescribed_by=nurse_user,
+        assigned_nurse=nurse_user,
+        start_date=timezone.localdate(),
+        planned_sessions=1,
+    )
+
+
 def test_valid_document_upload_metadata_safe_path_download_and_audit(api_client, doctor_user, patient, categories):
     response = upload_document(api_client, doctor_user, patient, categories["clinical"], filename="../secret.pdf")
     document = Document.objects.get()
@@ -108,6 +121,9 @@ def test_valid_document_upload_metadata_safe_path_download_and_audit(api_client,
     assert download["Content-Type"] == "application/pdf"
     assert "attachment" in download["Content-Disposition"]
     assert download["X-Content-Type-Options"] == "nosniff"
+    assert download["Cache-Control"] == "no-store, private"
+    assert download["Pragma"] == "no-cache"
+    assert download["Referrer-Policy"] == "no-referrer"
     assert "inline" in view["Content-Disposition"]
     assert AuditLog.objects.filter(action="DOCUMENT_UPLOADED").exists()
     assert AuditLog.objects.filter(action="DOCUMENT_DOWNLOADED").exists()
@@ -229,6 +245,7 @@ def test_clinical_photo_upload_metadata_download_archive_and_secretary_denial(
     assert response.data["height"] == 6
     assert photo.stored_filename.startswith("secure/clinical-photos/")
     assert download["X-Content-Type-Options"] == "nosniff"
+    assert download["Cache-Control"] == "no-store, private"
     assert archived.status_code == status.HTTP_200_OK
     assert secretary_read.status_code == status.HTTP_403_FORBIDDEN
     assert AuditLog.objects.filter(action="CLINICAL_PHOTO_UPLOADED").exists()
@@ -356,6 +373,7 @@ def test_photo_set_patient_filter_returns_patient_records_independent_of_creator
     patient,
     other_patient,
 ):
+    assign_nurse_care(patient, nurse_user)
     other_doctor = make_user(role=User.Role.DOCTOR, username="photo-set-other-doctor")
     face_set = ClinicalPhotoSet.objects.create(
         patient=patient,
@@ -413,6 +431,7 @@ def test_clinical_photo_security_remains_after_patient_scoped_photo_set_listing(
     patient,
     other_patient,
 ):
+    assign_nurse_care(patient, nurse_user)
     photo_set = ClinicalPhotoSet.objects.create(
         patient=patient,
         title="Suivi postopératoire",
@@ -447,6 +466,50 @@ def test_clinical_photo_security_remains_after_patient_scoped_photo_set_listing(
     assert nurse_view.status_code == status.HTTP_200_OK
     assert anonymous_view.status_code == status.HTTP_401_UNAUTHORIZED
     assert secretary_view.status_code == status.HTTP_403_FORBIDDEN
+
+
+def test_nurse_clinical_photo_access_is_limited_to_care_relevant_patients(
+    api_client,
+    doctor_user,
+    nurse_user,
+    patient,
+    other_patient,
+):
+    assign_nurse_care(patient, nurse_user)
+    allowed_set = ClinicalPhotoSet.objects.create(
+        patient=patient,
+        title="Care relevant",
+        anatomical_area="Face",
+        created_by=doctor_user,
+    )
+    unrelated_set = ClinicalPhotoSet.objects.create(
+        patient=other_patient,
+        title="Unrelated",
+        anatomical_area="Face",
+        created_by=doctor_user,
+    )
+    allowed_photo = upload_photo(api_client, doctor_user, patient, photo_set=allowed_set.id)
+    unrelated_photo = upload_photo(api_client, doctor_user, other_patient, photo_set=unrelated_set.id)
+
+    api_client.force_authenticate(user=nurse_user)
+    listed_sets = api_client.get("/api/v1/clinical-photo-sets/")
+    allowed_view = api_client.get(f"/api/v1/clinical-photos/{allowed_photo.data['id']}/view/")
+    unrelated_set_read = api_client.get(f"/api/v1/clinical-photo-sets/{unrelated_set.id}/")
+    unrelated_photo_view = api_client.get(f"/api/v1/clinical-photos/{unrelated_photo.data['id']}/view/")
+    unrelated_set_create = api_client.post(
+        "/api/v1/clinical-photo-sets/",
+        {"patient": other_patient.id, "title": "Bad", "anatomical_area": "Face"},
+        format="json",
+    )
+    unrelated_photo_create = upload_photo(api_client, nurse_user, other_patient)
+
+    assert listed_sets.status_code == status.HTTP_200_OK
+    assert {item["id"] for item in listed_sets.data["results"]} == {allowed_set.id}
+    assert allowed_view.status_code == status.HTTP_200_OK
+    assert unrelated_set_read.status_code == status.HTTP_404_NOT_FOUND
+    assert unrelated_photo_view.status_code == status.HTTP_404_NOT_FOUND
+    assert unrelated_set_create.status_code == status.HTTP_400_BAD_REQUEST
+    assert unrelated_photo_create.status_code == status.HTTP_400_BAD_REQUEST
 
 
 def test_rbac_doctor_nurse_secretary_and_admin(

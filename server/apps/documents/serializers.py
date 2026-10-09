@@ -10,7 +10,7 @@ from .models import (
     Document,
     DocumentCategory,
 )
-from .permissions import is_care_relevant
+from .permissions import is_care_relevant, is_patient_care_relevant
 from .services import create_photo_comparison, upload_clinical_photo, upload_document
 
 
@@ -128,6 +128,14 @@ class ClinicalPhotoSetSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ("id", "created_by", "created_at", "updated_at")
 
+    def validate(self, attrs):
+        request = self.context["request"]
+        user = request.user
+        patient = attrs.get("patient") or getattr(self.instance, "patient", None)
+        if user.role == User.Role.NURSE and not is_patient_care_relevant(user, getattr(patient, "id", None)):
+            raise serializers.ValidationError("Nurses may manage clinical photo sets for care-relevant patients only.")
+        return attrs
+
     def create(self, validated_data):
         try:
             return ClinicalPhotoSet.objects.create(created_by=self.context["request"].user, **validated_data)
@@ -188,6 +196,14 @@ class ClinicalPhotoSerializer(serializers.ModelSerializer):
             "updated_at",
         )
 
+    def validate(self, attrs):
+        request = self.context["request"]
+        user = request.user
+        patient = attrs.get("patient") or getattr(self.instance, "patient", None)
+        if user.role == User.Role.NURSE and not is_patient_care_relevant(user, getattr(patient, "id", None)):
+            raise serializers.ValidationError("Nurses may manage clinical photos for care-relevant patients only.")
+        return attrs
+
     def create(self, validated_data):
         uploaded_file = validated_data.pop("image")
         try:
@@ -218,6 +234,14 @@ class ClinicalPhotoComparisonSerializer(serializers.ModelSerializer):
         model = ClinicalPhotoComparison
         fields = "__all__"
         read_only_fields = ("id", "created_by", "created_at")
+
+    def validate(self, attrs):
+        request = self.context["request"]
+        user = request.user
+        patient = attrs.get("patient") or getattr(self.instance, "patient", None)
+        if user.role == User.Role.NURSE and not is_patient_care_relevant(user, getattr(patient, "id", None)):
+            raise serializers.ValidationError("Nurses may manage photo comparisons for care-relevant patients only.")
+        return attrs
 
     def create(self, validated_data):
         try:
