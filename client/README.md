@@ -7,7 +7,7 @@ Next.js 16, React 19, TypeScript, and the real Django API.
 Create `client/.env.local` when the API is not using the default local URL:
 
 ```env
-NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000/api/v1
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api/v1
 ```
 
 Do not put JWTs, passwords, or production secrets in frontend environment files.
@@ -16,10 +16,10 @@ Do not put JWTs, passwords, or production secrets in frontend environment files.
 
 ```powershell
 npm install
-npm run dev -- --hostname 127.0.0.1
+npm run dev -- --hostname 0.0.0.0
 ```
 
-Open `http://127.0.0.1:3000/login`.
+Open `http://localhost:3000/login`.
 
 ## Authentication
 

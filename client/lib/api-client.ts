@@ -27,14 +27,31 @@ export class ApiError extends Error {
   }
 }
 
-const defaultBaseUrl = "http://127.0.0.1:8000/api/v1";
-const apiBaseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL ?? defaultBaseUrl).replace(/\/+$/, "");
+const defaultBaseUrl = "http://localhost:8000/api/v1";
+const configuredApiBaseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL ?? defaultBaseUrl).replace(/\/+$/, "");
 const csrfCookieName = process.env.NEXT_PUBLIC_CSRF_COOKIE_NAME ?? "clinic_csrftoken";
 let csrfPromise: Promise<string | null> | null = null;
 let refreshPromise: Promise<boolean> | null = null;
 
+function isLoopbackHost(hostname: string) {
+  return hostname === "localhost" || hostname === "127.0.0.1";
+}
+
+function apiBaseUrl() {
+  if (typeof window === "undefined") return configuredApiBaseUrl;
+  try {
+    const url = new URL(configuredApiBaseUrl);
+    if (isLoopbackHost(url.hostname) && isLoopbackHost(window.location.hostname)) {
+      url.hostname = window.location.hostname;
+    }
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    return configuredApiBaseUrl;
+  }
+}
+
 function endpoint(path: string) {
-  return `${apiBaseUrl}/${path.replace(/^\/+/, "")}`;
+  return `${apiBaseUrl()}/${path.replace(/^\/+/, "")}`;
 }
 
 function isBodyInit(body: ApiBody): body is BodyInit {
@@ -54,6 +71,20 @@ function readCookie(name: string) {
   const match = cookies.find((cookie) => cookie.startsWith(`${encodeURIComponent(name)}=`));
   if (!match) return null;
   return decodeURIComponent(match.slice(name.length + 1));
+}
+
+function canWriteApiCookie() {
+  if (typeof window === "undefined") return false;
+  try {
+    return new URL(apiBaseUrl()).hostname === window.location.hostname;
+  } catch {
+    return false;
+  }
+}
+
+function writeCsrfCookie(token: string) {
+  if (typeof document === "undefined" || !canWriteApiCookie()) return;
+  document.cookie = `${encodeURIComponent(csrfCookieName)}=${encodeURIComponent(token)}; Path=/; SameSite=Lax`;
 }
 
 function jsonMessage(data: unknown, fallback: string) {
@@ -88,6 +119,7 @@ async function ensureCsrfToken() {
         const cookieToken = readCookie(csrfCookieName);
         if (cookieToken) return cookieToken;
         if (typeof data === "object" && data !== null && "csrfToken" in data && typeof data.csrfToken === "string") {
+          writeCsrfCookie(data.csrfToken);
           return data.csrfToken;
         }
         return null;
