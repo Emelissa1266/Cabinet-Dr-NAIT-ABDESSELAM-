@@ -10,6 +10,7 @@ from rest_framework.response import Response
 
 from apps.accounts.models import User
 from apps.audit.services import record_audit_event
+from apps.security.throttling import ActionRateLimitMixin
 
 from .models import (
     ClinicalPhoto,
@@ -55,7 +56,7 @@ def secure_file_response(*, field_file, filename: str, mime_type: str, inline: b
     return response
 
 
-class DocumentCategoryViewSet(viewsets.ModelViewSet):
+class DocumentCategoryViewSet(ActionRateLimitMixin, viewsets.ModelViewSet):
     queryset = DocumentCategory.objects.all()
     serializer_class = DocumentCategorySerializer
     permission_classes = [DocumentCategoryPermission]
@@ -92,7 +93,13 @@ class DocumentCategoryViewSet(viewsets.ModelViewSet):
         )
 
 
-class DocumentViewSet(viewsets.ModelViewSet):
+class DocumentViewSet(ActionRateLimitMixin, viewsets.ModelViewSet):
+    rate_limit_action_scopes = {
+        "archive": "sensitive_write",
+        "create": "file_upload",
+        "download": "private_download",
+        "view": "private_download",
+    }
     serializer_class = DocumentSerializer
     permission_classes = [DocumentPermission]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
@@ -194,7 +201,7 @@ class DocumentViewSet(viewsets.ModelViewSet):
         return Response({"detail": "Documents are archived, not deleted."}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
-class ClinicalPhotoSetViewSet(viewsets.ModelViewSet):
+class ClinicalPhotoSetViewSet(ActionRateLimitMixin, viewsets.ModelViewSet):
     serializer_class = ClinicalPhotoSetSerializer
     permission_classes = [ClinicalPhotoPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -210,7 +217,13 @@ class ClinicalPhotoSetViewSet(viewsets.ModelViewSet):
         return queryset
 
 
-class ClinicalPhotoViewSet(viewsets.ModelViewSet):
+class ClinicalPhotoViewSet(ActionRateLimitMixin, viewsets.ModelViewSet):
+    rate_limit_action_scopes = {
+        "archive": "sensitive_write",
+        "create": "file_upload",
+        "download": "private_download",
+        "view": "private_download",
+    }
     serializer_class = ClinicalPhotoSerializer
     permission_classes = [ClinicalPhotoPermission]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
@@ -287,7 +300,7 @@ class ClinicalPhotoViewSet(viewsets.ModelViewSet):
         return Response({"detail": "Clinical photos are archived, not deleted."}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
-class ClinicalPhotoComparisonViewSet(viewsets.ModelViewSet):
+class ClinicalPhotoComparisonViewSet(ActionRateLimitMixin, viewsets.ModelViewSet):
     serializer_class = ClinicalPhotoComparisonSerializer
     permission_classes = [ClinicalPhotoPermission]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]

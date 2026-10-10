@@ -90,4 +90,21 @@ python -m pytest
 
 - PostgreSQL is the authoritative development baseline.
 - Private documents and clinical photos are served through authenticated endpoints, not public media URLs.
+- API abuse protection uses Django/DRF throttling with configurable fixed-window policies:
+  - login IP: `RATE_LIMIT_AUTH_LOGIN_IP` (default `10/min`)
+  - login account failures: `RATE_LIMIT_AUTH_LOGIN_ACCOUNT` (default `5/5min`)
+  - refresh: `RATE_LIMIT_AUTH_REFRESH`
+  - CSRF bootstrap/session endpoints: `RATE_LIMIT_AUTH_CSRF`, `RATE_LIMIT_AUTH_SESSION`
+  - authenticated API, sensitive writes, searches, uploads, downloads, PDFs:
+    `RATE_LIMIT_API_GENERAL`, `RATE_LIMIT_SENSITIVE_WRITE`, `RATE_LIMIT_EXPENSIVE_SEARCH`,
+    `RATE_LIMIT_FILE_UPLOAD`, `RATE_LIMIT_PRIVATE_DOWNLOAD`, `RATE_LIMIT_PDF_GENERATION`
+- Local development uses Django's local-memory cache. Multi-worker production must configure
+  a shared cache through `RATE_LIMIT_CACHE_ALIAS` or `RATE_LIMIT_REDIS_URL` with `django-redis`
+  installed. Production settings require shared cache for critical auth limits unless explicitly
+  overridden with `RATE_LIMIT_REQUIRE_SHARED_CACHE=False` during an operational recovery. DRF/cache
+  throttles are lightweight fixed-window controls, not a complete DDoS defense; strict edge
+  enforcement should be handled by the reverse proxy, WAF, or API gateway.
+- Client IPs come from `REMOTE_ADDR` by default. Forwarded headers are accepted only when
+  `REMOTE_ADDR` is listed in `TRUSTED_PROXY_IPS`; otherwise `X-Forwarded-For` and similar
+  headers are ignored to prevent spoofing.
 - Production must provide real secrets, TLS termination, backups, monitoring, email/SMS providers as needed, and regulatory/operational review.

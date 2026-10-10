@@ -30,6 +30,17 @@ def invoice_paid_amount(invoice: Invoice) -> Decimal:
     return aggregate["total"] or MONEY_ZERO
 
 
+def invoice_reserved_allocation_amount(invoice: Invoice) -> Decimal:
+    from apps.payments.models import Payment
+
+    aggregate = invoice.allocations.exclude(payment__status=Payment.Status.CANCELLED).aggregate(total=Sum("amount"))
+    return aggregate["total"] or MONEY_ZERO
+
+
+def invoice_allocatable_amount(invoice: Invoice) -> Decimal:
+    return max(invoice.total - invoice_reserved_allocation_amount(invoice), MONEY_ZERO)
+
+
 def recalculate_invoice_status(invoice: Invoice) -> Invoice:
     invoice = Invoice.objects.select_for_update().get(pk=invoice.pk)
     if invoice.status in {Invoice.Status.DRAFT, Invoice.Status.CANCELLED}:

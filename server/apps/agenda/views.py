@@ -12,6 +12,7 @@ from rest_framework.views import APIView
 
 from apps.accounts.models import User
 from apps.audit.services import record_audit_event
+from apps.security.throttling import ActionRateLimitMixin, ScopedAPIViewRateLimitMixin
 
 from .models import (
     Appointment,
@@ -84,7 +85,7 @@ class AuditMixin:
         )
 
 
-class AppointmentTypeViewSet(AuditMixin, viewsets.ModelViewSet):
+class AppointmentTypeViewSet(ActionRateLimitMixin, AuditMixin, viewsets.ModelViewSet):
     queryset = AppointmentType.objects.all()
     serializer_class = AppointmentTypeSerializer
     permission_classes = [AgendaConfigPermission]
@@ -98,8 +99,9 @@ class AppointmentTypeViewSet(AuditMixin, viewsets.ModelViewSet):
     audit_update_action = "APPOINTMENT_TYPE_UPDATED"
 
 
-class AgendaStaffView(APIView):
+class AgendaStaffView(ScopedAPIViewRateLimitMixin, APIView):
     permission_classes = [AgendaPermission]
+    rate_limit_scope = "expensive_search"
 
     @extend_schema(responses=AgendaStaffSerializer(many=True))
     def get(self, request):
@@ -107,7 +109,16 @@ class AgendaStaffView(APIView):
         return Response(AgendaStaffSerializer(queryset, many=True).data)
 
 
-class AppointmentViewSet(viewsets.ModelViewSet):
+class AppointmentViewSet(ActionRateLimitMixin, viewsets.ModelViewSet):
+    rate_limit_action_scopes = {
+        "cancel": "sensitive_write",
+        "check_in": "sensitive_write",
+        "complete": "sensitive_write",
+        "confirm": "sensitive_write",
+        "no_show": "sensitive_write",
+        "reschedule": "sensitive_write",
+        "start": "sensitive_write",
+    }
     queryset = Appointment.objects.select_related(
         "patient",
         "appointment_type",
@@ -190,7 +201,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         return Response(self.get_serializer(appointment).data)
 
 
-class AppointmentStaffViewSet(AuditMixin, viewsets.ModelViewSet):
+class AppointmentStaffViewSet(ActionRateLimitMixin, AuditMixin, viewsets.ModelViewSet):
     queryset = AppointmentStaff.objects.select_related("appointment", "user")
     serializer_class = AppointmentStaffSerializer
     permission_classes = [AgendaPermission]
@@ -202,7 +213,7 @@ class AppointmentStaffViewSet(AuditMixin, viewsets.ModelViewSet):
     audit_update_action = "APPOINTMENT_STAFF_CHANGED"
 
 
-class StaffWorkingHoursViewSet(AuditMixin, viewsets.ModelViewSet):
+class StaffWorkingHoursViewSet(ActionRateLimitMixin, AuditMixin, viewsets.ModelViewSet):
     queryset = StaffWorkingHours.objects.select_related("staff")
     serializer_class = StaffWorkingHoursSerializer
     permission_classes = [AgendaConfigPermission]
@@ -214,7 +225,7 @@ class StaffWorkingHoursViewSet(AuditMixin, viewsets.ModelViewSet):
     audit_update_action = "WORKING_HOURS_CHANGED"
 
 
-class StaffTimeOffViewSet(AuditMixin, viewsets.ModelViewSet):
+class StaffTimeOffViewSet(ActionRateLimitMixin, AuditMixin, viewsets.ModelViewSet):
     queryset = StaffTimeOff.objects.select_related("staff", "created_by")
     serializer_class = StaffTimeOffSerializer
     permission_classes = [AgendaConfigPermission]
@@ -226,7 +237,7 @@ class StaffTimeOffViewSet(AuditMixin, viewsets.ModelViewSet):
     audit_update_action = "TIME_OFF_CHANGED"
 
 
-class ClinicClosureViewSet(AuditMixin, viewsets.ModelViewSet):
+class ClinicClosureViewSet(ActionRateLimitMixin, AuditMixin, viewsets.ModelViewSet):
     queryset = ClinicClosure.objects.select_related("created_by")
     serializer_class = ClinicClosureSerializer
     permission_classes = [AgendaConfigPermission]
@@ -237,7 +248,7 @@ class ClinicClosureViewSet(AuditMixin, viewsets.ModelViewSet):
     audit_update_action = "CLINIC_CLOSURE_CHANGED"
 
 
-class AppointmentRescheduleViewSet(viewsets.ReadOnlyModelViewSet):
+class AppointmentRescheduleViewSet(ActionRateLimitMixin, viewsets.ReadOnlyModelViewSet):
     queryset = AppointmentReschedule.objects.select_related("appointment", "changed_by")
     serializer_class = AppointmentRescheduleSerializer
     permission_classes = [AgendaPermission]
@@ -246,8 +257,9 @@ class AppointmentRescheduleViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ("-changed_at",)
 
 
-class AvailabilityView(APIView):
+class AvailabilityView(ScopedAPIViewRateLimitMixin, APIView):
     permission_classes = [AgendaPermission]
+    rate_limit_scope = "expensive_search"
 
     @extend_schema(
         parameters=[
@@ -292,8 +304,9 @@ def agenda_range_for_day(date_value):
     return start, end
 
 
-class AgendaDayView(APIView):
+class AgendaDayView(ScopedAPIViewRateLimitMixin, APIView):
     permission_classes = [AgendaPermission]
+    rate_limit_scope = "expensive_search"
 
     @extend_schema(
         parameters=[
@@ -323,8 +336,9 @@ class AgendaDayView(APIView):
         return Response(serializer.data)
 
 
-class AgendaWeekView(APIView):
+class AgendaWeekView(ScopedAPIViewRateLimitMixin, APIView):
     permission_classes = [AgendaPermission]
+    rate_limit_scope = "expensive_search"
 
     @extend_schema(
         parameters=[

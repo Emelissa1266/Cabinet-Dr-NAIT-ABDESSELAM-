@@ -1,7 +1,16 @@
 import pytest
+from django.core.cache import caches
 from rest_framework.test import APIClient
 
 from apps.accounts.models import User
+
+
+@pytest.fixture(autouse=True)
+def isolate_rate_limit_counters(settings):
+    cache_alias = getattr(settings, "RATE_LIMIT_CACHE_ALIAS", "default")
+    caches[cache_alias].clear()
+    yield
+    caches[cache_alias].clear()
 
 
 @pytest.fixture

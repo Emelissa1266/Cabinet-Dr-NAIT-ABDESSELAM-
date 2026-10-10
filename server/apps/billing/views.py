@@ -12,6 +12,7 @@ from rest_framework.views import APIView
 from apps.accounts.models import User
 from apps.audit.services import record_audit_event
 from apps.payments.models import Payment, PaymentAllocation
+from apps.security.throttling import ActionRateLimitMixin, ScopedAPIViewRateLimitMixin
 
 from .models import MONEY_ZERO, BillableService, Invoice, InvoiceItem
 from .pdf import render_invoice_pdf
@@ -37,7 +38,7 @@ def drf_validation(error):
     return {"detail": error.messages}
 
 
-class BillableServiceViewSet(viewsets.ModelViewSet):
+class BillableServiceViewSet(ActionRateLimitMixin, viewsets.ModelViewSet):
     queryset = BillableService.objects.all()
     serializer_class = BillableServiceSerializer
     permission_classes = [BillableServicePermission]
@@ -65,7 +66,13 @@ class BillableServiceViewSet(viewsets.ModelViewSet):
         )
 
 
-class InvoiceViewSet(viewsets.ModelViewSet):
+class InvoiceViewSet(ActionRateLimitMixin, viewsets.ModelViewSet):
+    rate_limit_action_scopes = {
+        "cancel": "sensitive_write",
+        "issue": "sensitive_write",
+        "pdf": "pdf_generation",
+        "print_pdf": "pdf_generation",
+    }
     serializer_class = InvoiceSerializer
     permission_classes = [InvoicePermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -141,6 +148,10 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         response = HttpResponse(pdf, content_type="application/pdf")
         disposition = "inline" if inline else "attachment"
         response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
+        response["Cache-Control"] = "no-store, private"
+        response["Pragma"] = "no-cache"
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Referrer-Policy"] = "no-referrer"
         record_audit_event(
             user=self.request.user,
             action="INVOICE_PRINT_VIEWED" if inline else "INVOICE_PDF_DOWNLOADED",
@@ -163,7 +174,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         return Response({"detail": "Invoices are cancelled, not deleted."}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
-class InvoiceItemViewSet(viewsets.ModelViewSet):
+class InvoiceItemViewSet(ActionRateLimitMixin, viewsets.ModelViewSet):
     serializer_class = InvoiceItemSerializer
     permission_classes = [InvoicePermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -204,8 +215,9 @@ class InvoiceItemViewSet(viewsets.ModelViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class PatientFinancialSummaryView(APIView):
+class PatientFinancialSummaryView(ScopedAPIViewRateLimitMixin, APIView):
     permission_classes = [FinancialPermission]
+    rate_limit_scope = "expensive_search"
 
     @extend_schema(
         parameters=[OpenApiParameter("patient_id", int, OpenApiParameter.PATH)],

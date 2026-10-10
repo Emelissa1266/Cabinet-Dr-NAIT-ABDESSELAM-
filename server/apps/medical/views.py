@@ -3,6 +3,7 @@ from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, viewsets
 
 from apps.audit.services import record_audit_event
+from apps.security.throttling import ActionRateLimitMixin
 
 from .models import Consultation, MedicalInstruction, Prescription
 from .permissions import MedicalReadDoctorWritePermission
@@ -53,7 +54,7 @@ class AuditMixin:
     update=extend_schema(description="Doctor updates a consultation."),
     partial_update=extend_schema(description="Doctor partially updates a consultation."),
 )
-class ConsultationViewSet(AuditMixin, viewsets.ModelViewSet):
+class ConsultationViewSet(ActionRateLimitMixin, AuditMixin, viewsets.ModelViewSet):
     queryset = Consultation.objects.select_related("patient", "doctor").all()
     serializer_class = ConsultationSerializer
     permission_classes = [MedicalReadDoctorWritePermission]
@@ -80,7 +81,7 @@ class ConsultationViewSet(AuditMixin, viewsets.ModelViewSet):
     update=extend_schema(description="Doctor updates prescription content."),
     partial_update=extend_schema(description="Doctor partially updates prescription content."),
 )
-class PrescriptionViewSet(AuditMixin, viewsets.ModelViewSet):
+class PrescriptionViewSet(ActionRateLimitMixin, AuditMixin, viewsets.ModelViewSet):
     queryset = Prescription.objects.select_related("patient", "doctor", "consultation").prefetch_related("items")
     serializer_class = PrescriptionSerializer
     permission_classes = [MedicalReadDoctorWritePermission]
@@ -107,7 +108,7 @@ class PrescriptionViewSet(AuditMixin, viewsets.ModelViewSet):
     update=extend_schema(description="Doctor updates a medical instruction."),
     partial_update=extend_schema(description="Doctor partially updates a medical instruction."),
 )
-class MedicalInstructionViewSet(AuditMixin, viewsets.ModelViewSet):
+class MedicalInstructionViewSet(ActionRateLimitMixin, AuditMixin, viewsets.ModelViewSet):
     queryset = MedicalInstruction.objects.select_related("patient", "doctor", "consultation").all()
     serializer_class = MedicalInstructionSerializer
     permission_classes = [MedicalReadDoctorWritePermission]

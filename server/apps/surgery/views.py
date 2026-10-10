@@ -6,6 +6,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.audit.services import record_audit_event
+from apps.security.throttling import ActionRateLimitMixin
 
 from .models import (
     AnesthesiaRecord,
@@ -93,7 +94,7 @@ class AuditCreateUpdateMixin:
         )
 
 
-class InterventionTypeViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
+class InterventionTypeViewSet(ActionRateLimitMixin, AuditCreateUpdateMixin, viewsets.ModelViewSet):
     queryset = InterventionType.objects.all()
     serializer_class = InterventionTypeSerializer
     permission_classes = [InterventionTypePermission]
@@ -107,7 +108,15 @@ class InterventionTypeViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
     audit_update_action = "INTERVENTION_TYPE_UPDATED"
 
 
-class SurgeryViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
+class SurgeryViewSet(ActionRateLimitMixin, AuditCreateUpdateMixin, viewsets.ModelViewSet):
+    rate_limit_action_scopes = {
+        "begin_preop": "sensitive_write",
+        "cancel": "sensitive_write",
+        "complete": "sensitive_write",
+        "mark_ready": "sensitive_write",
+        "plan": "sensitive_write",
+        "start": "sensitive_write",
+    }
     queryset = Surgery.objects.select_related("patient", "consultation", "surgeon", "intervention_type").prefetch_related(
         "preop_checklists",
         "preop_requirements",
@@ -205,7 +214,7 @@ class SurgeryViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
         return Response(self.get_serializer(surgery).data)
 
 
-class PreoperativeAssessmentViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
+class PreoperativeAssessmentViewSet(ActionRateLimitMixin, AuditCreateUpdateMixin, viewsets.ModelViewSet):
     queryset = PreoperativeAssessment.objects.select_related("surgery", "assessed_by")
     serializer_class = PreoperativeAssessmentSerializer
     permission_classes = [PreoperativeExecutionPermission]
@@ -218,7 +227,7 @@ class PreoperativeAssessmentViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSe
     audit_update_action = "PREOP_ASSESSMENT_UPDATED"
 
 
-class PreoperativeChecklistItemViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
+class PreoperativeChecklistItemViewSet(ActionRateLimitMixin, AuditCreateUpdateMixin, viewsets.ModelViewSet):
     queryset = PreoperativeChecklistItem.objects.all()
     serializer_class = PreoperativeChecklistItemSerializer
     permission_classes = [SurgeryConfigurationPermission]
@@ -232,7 +241,7 @@ class PreoperativeChecklistItemViewSet(AuditCreateUpdateMixin, viewsets.ModelVie
     audit_update_action = "PREOP_CHECKLIST_ITEM_UPDATED"
 
 
-class SurgeryPreoperativeChecklistViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
+class SurgeryPreoperativeChecklistViewSet(ActionRateLimitMixin, AuditCreateUpdateMixin, viewsets.ModelViewSet):
     queryset = SurgeryPreoperativeChecklist.objects.select_related("surgery", "checklist_item", "checked_by")
     serializer_class = SurgeryPreoperativeChecklistSerializer
     permission_classes = [PreoperativeExecutionPermission]
@@ -245,7 +254,7 @@ class SurgeryPreoperativeChecklistViewSet(AuditCreateUpdateMixin, viewsets.Model
     audit_update_action = "PREOP_CHECKLIST_UPDATED"
 
 
-class PreoperativeRequirementViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
+class PreoperativeRequirementViewSet(ActionRateLimitMixin, AuditCreateUpdateMixin, viewsets.ModelViewSet):
     queryset = PreoperativeRequirement.objects.select_related("surgery", "reviewed_by")
     serializer_class = PreoperativeRequirementSerializer
     permission_classes = [PreoperativeExecutionPermission]
@@ -259,7 +268,7 @@ class PreoperativeRequirementViewSet(AuditCreateUpdateMixin, viewsets.ModelViewS
     audit_update_action = "PREOP_REQUIREMENT_UPDATED"
 
 
-class SurgeryConsentViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
+class SurgeryConsentViewSet(ActionRateLimitMixin, AuditCreateUpdateMixin, viewsets.ModelViewSet):
     queryset = SurgeryConsent.objects.select_related("surgery", "confirmed_by")
     serializer_class = SurgeryConsentSerializer
     permission_classes = [PreoperativeExecutionPermission]
@@ -271,7 +280,7 @@ class SurgeryConsentViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
     audit_update_action = "SURGERY_CONSENT_UPDATED"
 
 
-class AnesthesiaRecordViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
+class AnesthesiaRecordViewSet(ActionRateLimitMixin, AuditCreateUpdateMixin, viewsets.ModelViewSet):
     queryset = AnesthesiaRecord.objects.select_related("surgery")
     serializer_class = AnesthesiaRecordSerializer
     permission_classes = [SurgeryPermission]
@@ -283,7 +292,7 @@ class AnesthesiaRecordViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
     audit_update_action = "ANESTHESIA_RECORD_UPDATED"
 
 
-class SurgeryOperativeRecordViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
+class SurgeryOperativeRecordViewSet(ActionRateLimitMixin, AuditCreateUpdateMixin, viewsets.ModelViewSet):
     queryset = SurgeryOperativeRecord.objects.select_related("surgery", "surgeon")
     serializer_class = SurgeryOperativeRecordSerializer
     permission_classes = [SurgeryPermission]
@@ -295,7 +304,7 @@ class SurgeryOperativeRecordViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSe
     audit_update_action = "OPERATIVE_RECORD_UPDATED"
 
 
-class SurgeryTeamMemberViewSet(viewsets.ModelViewSet):
+class SurgeryTeamMemberViewSet(ActionRateLimitMixin, viewsets.ModelViewSet):
     queryset = SurgeryTeamMember.objects.select_related("surgery", "user")
     serializer_class = SurgeryTeamMemberSerializer
     permission_classes = [SurgeryPermission]
@@ -305,7 +314,7 @@ class SurgeryTeamMemberViewSet(viewsets.ModelViewSet):
     ordering = ("created_at",)
 
 
-class IntraoperativeEventViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
+class IntraoperativeEventViewSet(ActionRateLimitMixin, AuditCreateUpdateMixin, viewsets.ModelViewSet):
     queryset = IntraoperativeEvent.objects.select_related("surgery", "recorded_by")
     serializer_class = IntraoperativeEventSerializer
     permission_classes = [PreoperativeExecutionPermission]
@@ -319,7 +328,7 @@ class IntraoperativeEventViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
     audit_update_action = "INTRAOPERATIVE_EVENT_UPDATED"
 
 
-class SurgeryComplicationViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
+class SurgeryComplicationViewSet(ActionRateLimitMixin, AuditCreateUpdateMixin, viewsets.ModelViewSet):
     queryset = SurgeryComplication.objects.select_related("surgery", "identified_by")
     serializer_class = SurgeryComplicationSerializer
     permission_classes = [PreoperativeExecutionPermission]
@@ -333,7 +342,7 @@ class SurgeryComplicationViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
     audit_update_action = "SURGERY_COMPLICATION_UPDATED"
 
 
-class PostoperativeAssessmentViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
+class PostoperativeAssessmentViewSet(ActionRateLimitMixin, AuditCreateUpdateMixin, viewsets.ModelViewSet):
     queryset = PostoperativeAssessment.objects.select_related("surgery", "assessed_by")
     serializer_class = PostoperativeAssessmentSerializer
     permission_classes = [SurgeryPermission]
@@ -347,7 +356,7 @@ class PostoperativeAssessmentViewSet(AuditCreateUpdateMixin, viewsets.ModelViewS
     audit_update_action = "POSTOP_ASSESSMENT_UPDATED"
 
 
-class PostoperativeFollowUpViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
+class PostoperativeFollowUpViewSet(ActionRateLimitMixin, AuditCreateUpdateMixin, viewsets.ModelViewSet):
     queryset = PostoperativeFollowUp.objects.select_related("surgery", "patient", "doctor")
     serializer_class = PostoperativeFollowUpSerializer
     permission_classes = [SurgeryPermission]

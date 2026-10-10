@@ -7,6 +7,7 @@ from rest_framework.response import Response
 
 from apps.accounts.models import User
 from apps.billing.views import drf_validation
+from apps.security.throttling import ActionRateLimitMixin
 
 from .models import Payment, PaymentAllocation, Receipt
 from .permissions import PaymentPermission
@@ -20,7 +21,12 @@ from .serializers import (
 from .services import allocate_payment, cancel_payment, complete_payment
 
 
-class PaymentViewSet(viewsets.ModelViewSet):
+class PaymentViewSet(ActionRateLimitMixin, viewsets.ModelViewSet):
+    rate_limit_action_scopes = {
+        "allocate": "sensitive_write",
+        "cancel": "sensitive_write",
+        "complete": "sensitive_write",
+    }
     serializer_class = PaymentSerializer
     permission_classes = [PaymentPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -92,7 +98,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
         return Response({"detail": "Payments are cancelled, not deleted."}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
-class PaymentAllocationViewSet(viewsets.ReadOnlyModelViewSet):
+class PaymentAllocationViewSet(ActionRateLimitMixin, viewsets.ReadOnlyModelViewSet):
     serializer_class = PaymentAllocationSerializer
     permission_classes = [PaymentPermission]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
@@ -109,7 +115,7 @@ class PaymentAllocationViewSet(viewsets.ReadOnlyModelViewSet):
         return queryset
 
 
-class ReceiptViewSet(viewsets.ReadOnlyModelViewSet):
+class ReceiptViewSet(ActionRateLimitMixin, viewsets.ReadOnlyModelViewSet):
     serializer_class = ReceiptSerializer
     permission_classes = [PaymentPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]

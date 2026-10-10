@@ -2,9 +2,11 @@
 
 import os
 from datetime import timedelta
+from importlib.util import find_spec
 from pathlib import Path
 
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -50,6 +52,7 @@ INSTALLED_APPS = [
     "django_filters",
     "drf_spectacular",
     "apps.accounts",
+    "apps.security",
     "apps.audit",
     "apps.patients",
     "apps.medical",
@@ -65,6 +68,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "apps.security.middleware.SecurityHeadersMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -172,6 +176,10 @@ CORS_ALLOW_CREDENTIALS = True
 CSRF_COOKIE_NAME = os.getenv("CSRF_COOKIE_NAME", "clinic_csrftoken")
 CSRF_COOKIE_SAMESITE = os.getenv("CSRF_COOKIE_SAMESITE", "Lax")
 CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_SECURE = env_bool("CSRF_COOKIE_SECURE", False)
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
+SESSION_COOKIE_SECURE = env_bool("SESSION_COOKIE_SECURE", False)
 AUTH_ACCESS_COOKIE_NAME = os.getenv("AUTH_ACCESS_COOKIE_NAME", "clinic_access")
 AUTH_REFRESH_COOKIE_NAME = os.getenv("AUTH_REFRESH_COOKIE_NAME", "clinic_refresh")
 AUTH_COOKIE_DOMAIN = os.getenv("AUTH_COOKIE_DOMAIN") or None
@@ -179,6 +187,18 @@ AUTH_COOKIE_SAMESITE = os.getenv("AUTH_COOKIE_SAMESITE", "Lax")
 AUTH_COOKIE_SECURE = env_bool("AUTH_COOKIE_SECURE", False)
 AUTH_ACCESS_COOKIE_PATH = os.getenv("AUTH_ACCESS_COOKIE_PATH", "/api/v1/")
 AUTH_REFRESH_COOKIE_PATH = os.getenv("AUTH_REFRESH_COOKIE_PATH", "/api/v1/auth/")
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = os.getenv("SECURE_REFERRER_POLICY", "same-origin")
+X_FRAME_OPTIONS = os.getenv("X_FRAME_OPTIONS", "DENY")
+SECURITY_PERMISSIONS_POLICY = os.getenv(
+    "SECURITY_PERMISSIONS_POLICY",
+    "camera=(), microphone=(), geolocation=(), payment=(), usb=(), fullscreen=(self)",
+)
+SECURITY_CSP_REPORT_ONLY = env_bool("SECURITY_CSP_REPORT_ONLY", False)
+SECURITY_CSP_REPORT_ONLY_POLICY = os.getenv(
+    "SECURITY_CSP_REPORT_ONLY_POLICY",
+    "default-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'",
+)
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
@@ -186,6 +206,9 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
+    ),
+    "DEFAULT_THROTTLE_CLASSES": (
+        "apps.security.throttling.AuthenticatedApiThrottle",
     ),
     "DEFAULT_FILTER_BACKENDS": (
         "django_filters.rest_framework.DjangoFilterBackend",
@@ -195,6 +218,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": env_int("DRF_PAGE_SIZE", 20),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "EXCEPTION_HANDLER": "apps.security.exceptions.clinic_exception_handler",
 }
 
 SIMPLE_JWT = {
@@ -220,3 +244,83 @@ SPECTACULAR_SETTINGS = {
 
 DATA_UPLOAD_MAX_MEMORY_SIZE = env_int("DATA_UPLOAD_MAX_MEMORY_SIZE", 5 * 1024 * 1024)
 FILE_UPLOAD_MAX_MEMORY_SIZE = env_int("FILE_UPLOAD_MAX_MEMORY_SIZE", 5 * 1024 * 1024)
+
+CACHES = {
+    "default": {
+        "BACKEND": os.getenv("DJANGO_CACHE_BACKEND", "django.core.cache.backends.locmem.LocMemCache"),
+        "LOCATION": os.getenv("DJANGO_CACHE_LOCATION", "clinic-dev-cache"),
+    }
+}
+
+RATE_LIMIT_REDIS_URL = os.getenv("RATE_LIMIT_REDIS_URL")
+if RATE_LIMIT_REDIS_URL:
+    if find_spec("django_redis") is None:
+        raise ImproperlyConfigured("RATE_LIMIT_REDIS_URL requires django-redis to be installed.")
+    CACHES["rate_limit"] = {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": RATE_LIMIT_REDIS_URL,
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        },
+    }
+
+RATE_LIMIT_CACHE_ALIAS = os.getenv(
+    "RATE_LIMIT_CACHE_ALIAS",
+    "rate_limit" if RATE_LIMIT_REDIS_URL else "default",
+)
+RATE_LIMIT_REQUIRE_SHARED_CACHE = env_bool("RATE_LIMIT_REQUIRE_SHARED_CACHE", False)
+TRUSTED_PROXY_IPS = env_list("TRUSTED_PROXY_IPS")
+RATE_LIMIT_THROTTLED_MESSAGE = os.getenv(
+    "RATE_LIMIT_THROTTLED_MESSAGE",
+    "Trop de tentatives. Veuillez réessayer plus tard.",
+)
+RATE_LIMIT_POLICIES = {
+    "auth_login_ip": {
+        "rate": os.getenv("RATE_LIMIT_AUTH_LOGIN_IP", "10/min"),
+        "critical": True,
+    },
+    "auth_login_account": {
+        "rate": os.getenv("RATE_LIMIT_AUTH_LOGIN_ACCOUNT", "5/5min"),
+        "critical": True,
+    },
+    "auth_login_global": {
+        "rate": os.getenv("RATE_LIMIT_AUTH_LOGIN_GLOBAL", "120/min"),
+        "critical": True,
+    },
+    "auth_refresh": {
+        "rate": os.getenv("RATE_LIMIT_AUTH_REFRESH", "30/min"),
+        "critical": True,
+    },
+    "auth_csrf": {
+        "rate": os.getenv("RATE_LIMIT_AUTH_CSRF", "60/min"),
+        "critical": False,
+    },
+    "auth_session": {
+        "rate": os.getenv("RATE_LIMIT_AUTH_SESSION", "120/min"),
+        "critical": False,
+    },
+    "api_general": {
+        "rate": os.getenv("RATE_LIMIT_API_GENERAL", "1000/min"),
+        "critical": False,
+    },
+    "sensitive_write": {
+        "rate": os.getenv("RATE_LIMIT_SENSITIVE_WRITE", "120/min"),
+        "critical": False,
+    },
+    "expensive_search": {
+        "rate": os.getenv("RATE_LIMIT_EXPENSIVE_SEARCH", "120/min"),
+        "critical": False,
+    },
+    "file_upload": {
+        "rate": os.getenv("RATE_LIMIT_FILE_UPLOAD", "30/min"),
+        "critical": False,
+    },
+    "private_download": {
+        "rate": os.getenv("RATE_LIMIT_PRIVATE_DOWNLOAD", "120/min"),
+        "critical": False,
+    },
+    "pdf_generation": {
+        "rate": os.getenv("RATE_LIMIT_PDF_GENERATION", "30/min"),
+        "critical": False,
+    },
+}

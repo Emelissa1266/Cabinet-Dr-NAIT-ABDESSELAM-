@@ -5,7 +5,7 @@ from django.conf import settings
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema
 from rest_framework import filters, status, viewsets
-from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.exceptions import AuthenticationFailed, Throttled
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -14,6 +14,14 @@ from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.audit.services import record_audit_event
+from apps.security.throttling import (
+    AccountFailureLimiter,
+    AuthSessionThrottle,
+    CsrfBootstrapThrottle,
+    LoginGlobalThrottle,
+    LoginIpThrottle,
+    RefreshThrottle,
+)
 
 from .cookies import clear_auth_cookies, csrf_token_response, enforce_csrf, set_auth_cookies
 from .models import User
@@ -34,12 +42,22 @@ class CookieAuthenticateHeaderMixin:
 class LoginView(CookieAuthenticateHeaderMixin, APIView):
     authentication_classes: ClassVar[list[type]] = []
     permission_classes: ClassVar[list[type]] = [AllowAny]
+    throttle_classes: ClassVar[list[type]] = [LoginIpThrottle, LoginGlobalThrottle]
 
     def post(self, request):
         enforce_csrf(request)
+        limiter = AccountFailureLimiter(request.data.get(User.USERNAME_FIELD, ""))
+        account_check = limiter.check()
+        if not account_check.allowed:
+            raise Throttled(wait=account_check.wait)
         serializer = LoginSerializer(data=request.data, context={"request": request})
-        serializer.is_valid(raise_exception=True)
+        try:
+            serializer.is_valid(raise_exception=True)
+        except AuthenticationFailed:
+            limiter.record_failure()
+            raise
         data = serializer.validated_data
+        limiter.clear()
         response = Response({"user": data["user"]}, status=status.HTTP_200_OK)
         set_auth_cookies(response, access=data["access"], refresh=data["refresh"])
         return response
@@ -49,6 +67,7 @@ class LoginView(CookieAuthenticateHeaderMixin, APIView):
 class RefreshView(CookieAuthenticateHeaderMixin, APIView):
     authentication_classes: ClassVar[list[type]] = []
     permission_classes: ClassVar[list[type]] = [AllowAny]
+    throttle_classes: ClassVar[list[type]] = [RefreshThrottle]
 
     def post(self, request):
         enforce_csrf(request)
@@ -76,6 +95,7 @@ class RefreshView(CookieAuthenticateHeaderMixin, APIView):
 
 class LogoutView(APIView):
     permission_classes: ClassVar[list[type]] = [IsAuthenticated]
+    throttle_classes: ClassVar[list[type]] = [AuthSessionThrottle]
 
     @extend_schema(
         description="Blacklist the refresh cookie token and clear authentication cookies.",
@@ -95,6 +115,7 @@ class LogoutView(APIView):
 class CsrfView(APIView):
     authentication_classes: ClassVar[list[type]] = []
     permission_classes: ClassVar[list[type]] = [AllowAny]
+    throttle_classes: ClassVar[list[type]] = [CsrfBootstrapThrottle]
 
     @extend_schema(description="Set and return the CSRF token used for cookie-authenticated unsafe requests.")
     def get(self, request):
@@ -103,6 +124,7 @@ class CsrfView(APIView):
 
 class MeView(APIView):
     permission_classes: ClassVar[list[type]] = [IsAuthenticated]
+    throttle_classes: ClassVar[list[type]] = [AuthSessionThrottle]
 
     @extend_schema(
         description="Return the currently authenticated active user's profile and role.",

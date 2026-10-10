@@ -97,6 +97,13 @@ function jsonMessage(data: unknown, fallback: string) {
   return fallback;
 }
 
+function responseFallback(response: Response, fallback: string) {
+  if (response.status === 429) {
+    return "Trop de requêtes. Veuillez réessayer dans quelques instants.";
+  }
+  return fallback;
+}
+
 async function readResponse(response: Response) {
   if (response.status === 204) return undefined;
   const contentType = response.headers.get("content-type") ?? "";
@@ -115,7 +122,13 @@ async function ensureCsrfToken() {
     })
       .then(async (response) => {
         const data = await readResponse(response);
-        if (!response.ok) throw new ApiError(jsonMessage(data, "Session de sécurité indisponible."), response.status, data);
+        if (!response.ok) {
+          throw new ApiError(
+            jsonMessage(data, responseFallback(response, "Session de sécurité indisponible.")),
+            response.status,
+            data,
+          );
+        }
         const cookieToken = readCookie(csrfCookieName);
         if (cookieToken) return cookieToken;
         if (typeof data === "object" && data !== null && "csrfToken" in data && typeof data.csrfToken === "string") {
@@ -179,7 +192,13 @@ async function refreshAccessToken() {
       }))
       .then(async (response) => {
         const data = await readResponse(response);
-        if (!response.ok) throw new ApiError(jsonMessage(data, "Session expirée."), response.status, data);
+        if (!response.ok) {
+          throw new ApiError(
+            jsonMessage(data, responseFallback(response, "Session expirée.")),
+            response.status,
+            data,
+          );
+        }
         return true;
       })
       .catch(() => {
@@ -216,7 +235,13 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
   );
 
   const data = await readResponse(response);
-  if (!response.ok) throw new ApiError(jsonMessage(data, "Impossible de traiter la demande."), response.status, data);
+  if (!response.ok) {
+    throw new ApiError(
+      jsonMessage(data, responseFallback(response, "Impossible de traiter la demande.")),
+      response.status,
+      data,
+    );
+  }
   return data as T;
 }
 
@@ -244,7 +269,11 @@ export async function apiBlobRequest(path: string, options: ApiRequestOptions = 
 
   if (!response.ok) {
     const data = await readResponse(response);
-    throw new ApiError(jsonMessage(data, "Impossible de traiter la demande."), response.status, data);
+    throw new ApiError(
+      jsonMessage(data, responseFallback(response, "Impossible de traiter la demande.")),
+      response.status,
+      data,
+    );
   }
 
   return { blob: await response.blob(), headers: response.headers, status: response.status };

@@ -6,7 +6,11 @@ from django.utils import timezone
 
 from apps.audit.services import record_audit_event
 from apps.billing.models import MONEY_ZERO, Invoice
-from apps.billing.services import next_financial_number, recalculate_invoice_status
+from apps.billing.services import (
+    invoice_allocatable_amount,
+    next_financial_number,
+    recalculate_invoice_status,
+)
 
 from .models import Payment, PaymentAllocation, Receipt
 
@@ -42,7 +46,7 @@ def allocate_payment(*, payment: Payment, invoice: Invoice, amount: Decimal, act
             raise ValidationError("Allocation exceeds unallocated payment amount.")
         if invoice.status in {Invoice.Status.DRAFT, Invoice.Status.CANCELLED}:
             raise ValidationError("Payments can only be allocated to issued invoices.")
-        if amount > invoice.remaining_amount:
+        if amount > invoice_allocatable_amount(invoice):
             raise ValidationError("Allocation exceeds invoice remaining amount.")
         allocation = PaymentAllocation.objects.create(payment=payment, invoice=invoice, amount=amount)
         record_audit_event(

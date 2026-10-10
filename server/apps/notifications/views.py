@@ -6,6 +6,8 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.security.throttling import ActionRateLimitMixin
+
 from .models import Notification
 from .serializers import MarkAllReadSerializer, NotificationSerializer, UnreadCountSerializer
 from .services import mark_all_notifications_read, mark_notification_read, mark_notification_unread
@@ -17,7 +19,13 @@ def drf_validation(error):
     return {"detail": error.messages}
 
 
-class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
+class NotificationViewSet(ActionRateLimitMixin, viewsets.ReadOnlyModelViewSet):
+    rate_limit_action_scopes = {
+        "mark_all_read": "sensitive_write",
+        "mark_read": "sensitive_write",
+        "mark_unread": "sensitive_write",
+        "unread_count": "expensive_search",
+    }
     serializer_class = NotificationSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]

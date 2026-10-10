@@ -8,6 +8,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.audit.services import record_audit_event
+from apps.security.throttling import ActionRateLimitMixin
 
 from .filters import PatientFilter
 from .models import MedicalAlert, Patient
@@ -44,7 +45,7 @@ from .serializers import MedicalAlertSerializer, PatientSerializer
         responses={204: None, 403: None, 404: None},
     ),
 )
-class PatientViewSet(viewsets.ModelViewSet):
+class PatientViewSet(ActionRateLimitMixin, viewsets.ModelViewSet):
     queryset = Patient.objects.select_related("created_by", "updated_by").all()
     serializer_class = PatientSerializer
     permission_classes: ClassVar[list[type]] = [PatientPermission]
@@ -107,7 +108,8 @@ class PatientViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 
-class MedicalAlertViewSet(viewsets.ModelViewSet):
+class MedicalAlertViewSet(ActionRateLimitMixin, viewsets.ModelViewSet):
+    rate_limit_action_scopes = {"resolve": "sensitive_write"}
     serializer_class = MedicalAlertSerializer
     permission_classes = [MedicalAlertPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]

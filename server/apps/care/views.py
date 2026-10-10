@@ -7,6 +7,7 @@ from rest_framework.response import Response
 
 from apps.accounts.models import User
 from apps.audit.services import record_audit_event
+from apps.security.throttling import ActionRateLimitMixin
 
 from .models import (
     Care,
@@ -76,7 +77,7 @@ class AuditCreateUpdateMixin:
         )
 
 
-class CareCategoryViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
+class CareCategoryViewSet(ActionRateLimitMixin, AuditCreateUpdateMixin, viewsets.ModelViewSet):
     queryset = CareCategory.objects.all()
     serializer_class = CareCategorySerializer
     permission_classes = [CareCatalogPermission]
@@ -90,7 +91,7 @@ class CareCategoryViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
     audit_update_action = "CARE_CATEGORY_UPDATED"
 
 
-class CareTypeViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
+class CareTypeViewSet(ActionRateLimitMixin, AuditCreateUpdateMixin, viewsets.ModelViewSet):
     queryset = CareType.objects.select_related("category").all()
     serializer_class = CareTypeSerializer
     permission_classes = [CareCatalogPermission]
@@ -104,7 +105,7 @@ class CareTypeViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
     audit_update_action = "CARE_TYPE_UPDATED"
 
 
-class CareViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
+class CareViewSet(ActionRateLimitMixin, AuditCreateUpdateMixin, viewsets.ModelViewSet):
     queryset = (
         Care.objects.select_related(
             "patient",
@@ -146,7 +147,8 @@ class CareViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
         return queryset
 
 
-class CareSessionViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
+class CareSessionViewSet(ActionRateLimitMixin, AuditCreateUpdateMixin, viewsets.ModelViewSet):
+    rate_limit_action_scopes = {"complete": "sensitive_write", "start": "sensitive_write"}
     queryset = CareSession.objects.select_related("care", "care__patient", "care__care_type", "care__care_type__category", "nurse").all()
     serializer_class = CareSessionSerializer
     permission_classes = [CareSessionPermission]
@@ -192,7 +194,7 @@ class CareSessionViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
         return Response(self.get_serializer(session).data)
 
 
-class CareObservationViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
+class CareObservationViewSet(ActionRateLimitMixin, AuditCreateUpdateMixin, viewsets.ModelViewSet):
     queryset = CareObservation.objects.select_related("care_session", "care_session__care", "nurse").all()
     serializer_class = CareObservationSerializer
     permission_classes = [NursingExecutionPermission]
@@ -217,7 +219,7 @@ class CareObservationViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
         return queryset
 
 
-class ClinicalMeasurementViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
+class ClinicalMeasurementViewSet(ActionRateLimitMixin, AuditCreateUpdateMixin, viewsets.ModelViewSet):
     queryset = ClinicalMeasurement.objects.select_related("care_session", "care_session__care", "recorded_by")
     serializer_class = ClinicalMeasurementSerializer
     permission_classes = [NursingExecutionPermission]
@@ -236,7 +238,7 @@ class ClinicalMeasurementViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
     audit_update_action = "CLINICAL_MEASUREMENT_UPDATED"
 
 
-class CareSessionMaterialViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
+class CareSessionMaterialViewSet(ActionRateLimitMixin, AuditCreateUpdateMixin, viewsets.ModelViewSet):
     queryset = CareSessionMaterial.objects.select_related("care_session", "care_session__care", "recorded_by")
     serializer_class = CareSessionMaterialSerializer
     permission_classes = [NursingExecutionPermission]
@@ -250,7 +252,7 @@ class CareSessionMaterialViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
     audit_update_action = "CARE_MATERIAL_UPDATED"
 
 
-class CareParameterDefinitionViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
+class CareParameterDefinitionViewSet(ActionRateLimitMixin, AuditCreateUpdateMixin, viewsets.ModelViewSet):
     queryset = CareParameterDefinition.objects.select_related("care_type").all()
     serializer_class = CareParameterDefinitionSerializer
     permission_classes = [CareParameterDefinitionPermission]
@@ -264,7 +266,7 @@ class CareParameterDefinitionViewSet(AuditCreateUpdateMixin, viewsets.ModelViewS
     audit_update_action = "CARE_PARAMETER_DEFINITION_UPDATED"
 
 
-class CareSessionParameterViewSet(viewsets.ModelViewSet):
+class CareSessionParameterViewSet(ActionRateLimitMixin, viewsets.ModelViewSet):
     queryset = CareSessionParameter.objects.select_related(
         "care_session",
         "care_session__care",
