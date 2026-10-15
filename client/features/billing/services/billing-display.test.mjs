@@ -41,3 +41,16 @@ test("billing datetime uses 24-hour presentation", () => {
   assert.match(rendered, /13:34|14:34/);
   assert.doesNotMatch(rendered, /AM|PM/i);
 });
+
+const { invoicePreview } = loadTs("./invoice-form.ts");
+test("invoice preview preserves decimal precision across multiple lines and discounts", () => {
+  assert.equal(invoicePreview([{quantity: "2.00", unit_price: "1500.25"}, {quantity: "1", unit_price: "500", discount_amount: "0.10"}], "100"), "3400.40");
+  assert.equal(invoicePreview([{quantity: "0.01", unit_price: "0.50"}], "0"), "0.00");
+  assert.equal(invoicePreview([{quantity: "0.03", unit_price: "0.50"}], "0"), "0.02");
+  assert.equal(invoicePreview([{quantity: "1.01", unit_price: "0.50", discount_amount: "0.01"}], "0"), "0.50");
+});
+test("invoice preview rejects excessive discounts and malformed decimals", () => {
+  assert.throws(() => invoicePreview([{quantity: "1", unit_price: "2", discount_amount: "3"}], "0"));
+  assert.throws(() => invoicePreview([{quantity: "1", unit_price: "2"}], "3"));
+  assert.throws(() => invoicePreview([{quantity: "1", unit_price: "2.001"}], "0"));
+});

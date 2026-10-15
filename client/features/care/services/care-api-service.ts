@@ -1,3 +1,4 @@
+import { collectCarePages } from "./care-pagination";
 import { apiRequest } from "@/lib/api-client";
 import { queryString } from "@/features/medical/services/query";
 import type {
@@ -43,7 +44,15 @@ export function listCareTypes(params: CareTypeListParams = {}) {
 }
 
 export function listCares(params: CareListParams = {}) {
-  return apiRequest<PaginatedResponse<CareApi>>(`cares/${queryString(params)}`);
+  return apiRequest<PaginatedResponse<CareApi>>(`cares/${queryString(params)}`, { cache: "no-store" });
+}
+
+export function listAllCares(params: Omit<CareListParams, "page"> = {}) {
+  return collectCarePages((page) => listCares({ ...params, page }));
+}
+
+export function listAllCareSessions(params: Omit<CareSessionListParams, "page"> = {}) {
+  return collectCarePages((page) => listCareSessions({ ...params, page }));
 }
 
 export function getCare(id: number | string) {
@@ -63,7 +72,7 @@ export function deleteCare(id: number | string) {
 }
 
 export function listCareSessions(params: CareSessionListParams = {}) {
-  return apiRequest<PaginatedResponse<CareSessionApi>>(`care-sessions/${queryString(params)}`);
+  return apiRequest<PaginatedResponse<CareSessionApi>>(`care-sessions/${queryString(params)}`, { cache: "no-store" });
 }
 
 export function getCareSession(id: number | string) {

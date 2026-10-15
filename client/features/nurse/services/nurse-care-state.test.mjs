@@ -65,3 +65,30 @@ test("created session is merged by backend id", () => {
   assert.equal(state[0], session);
   assert.deepEqual(state.map((item) => item.id), [40, 39]);
 });
+
+const { collectCarePages } = loadTs("../../care/services/care-pagination.ts");
+
+test("assigned planned care without sessions beyond page one is loaded", async () => {
+  const calls = [];
+  const result = await collectCarePages(async (page) => {
+    calls.push(page);
+    return page === 1
+      ? { count: 21, next: "http://localhost:8000/api/v1/cares/?page=2", previous: null, results: Array.from({ length: 20 }, (_, id) => care({ id })) }
+      : { count: 21, next: null, previous: "?page=1", results: [care({ id: 99, assigned_nurse: 7, prescribed_by: 3, completed_sessions: 0 })] };
+  });
+  assert.deepEqual(calls, [1, 2]);
+  assert.equal(result.results.length, 21);
+  assert.ok(eligibleSessionCares(result.results).some((item) => item.id === 99));
+});
+
+test("fresh assignment snapshot replaces former nurse records without retaining stale care", async () => {
+  const result = await collectCarePages(async () => ({ count: 1, next: null, previous: null, results: [care({ id: 12 })] }));
+  assert.deepEqual(result.results.map((item) => item.id), [12]);
+});
+
+test("pagination errors reject the snapshot instead of presenting a partial assignment list", async () => {
+  await assert.rejects(collectCarePages(async (page) => {
+    if (page === 2) throw new Error("Network unavailable");
+    return { count: 2, next: "?page=2", previous: null, results: [care()] };
+  }), /Network unavailable/);
+});

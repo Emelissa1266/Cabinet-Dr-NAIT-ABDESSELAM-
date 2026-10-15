@@ -210,3 +210,76 @@ test("photo type filtering does not remove persisted series from the upload sele
   assert.deepEqual(photoSetsForUploadSelector(sets, "BEFORE").map((set) => set.id), [81, 82]);
   assert.deepEqual(photoSetsForUploadSelector(sets, "AFTER").map((set) => set.id), [81, 82]);
 });
+
+const { validatePhotoFiles, importPhotoFiles, adjacentPhoto, toLocalCapture, seriesForPatient } = load("features/phototheque/services/gallery-workflow.ts");
+
+test("gallery uploads validate configured formats, extension and per-file size", () => {
+  const valid = new File(["pixels"], "photo.jpeg", { type: "image/jpeg" });
+  assert.equal(validatePhotoFiles([valid], 10, ["image/jpeg", "image/png"]), "");
+  assert.match(validatePhotoFiles([], 10, ["image/jpeg"]), /au moins/);
+  assert.match(validatePhotoFiles([valid], 2, ["image/jpeg"]), /maximale/);
+  assert.match(validatePhotoFiles([new File(["unsafe"], "photo.svg", { type: "image/svg+xml" })], 100, ["image/jpeg"]), /JPEG ou PNG/);
+  assert.match(validatePhotoFiles([new File(["pixels"], "photo.exe", { type: "image/jpeg" })], 100, ["image/jpeg"]), /JPEG ou PNG/);
+});
+
+test("multiple imports keep successful records and retry only failed files", async () => {
+  const files = ["one.jpg", "two.jpg", "three.jpg"].map(name => new File(["pixels"], name, { type: "image/jpeg" }));
+  const calls = [], progress = [];
+  const result = await importPhotoFiles(files, async file => {
+    calls.push(file.name);
+    if (file.name === "two.jpg") throw new Error("Rejected upload");
+    return { id: file.name };
+  }, (done, total) => progress.push([done, total]));
+  assert.deepEqual(result.created.map(item => item.id), ["one.jpg", "three.jpg"]);
+  assert.deepEqual(result.failed.map(item => item.file.name), ["two.jpg"]);
+  assert.deepEqual(progress, [[0, 3], [1, 3], [2, 3], [3, 3]]);
+  await importPhotoFiles(result.failed.map(item => item.file), async file => { calls.push(file.name); return {}; }, () => {});
+  assert.deepEqual(calls, ["one.jpg", "two.jpg", "three.jpg", "two.jpg"]);
+});
+
+test("viewer navigation follows loaded page and stops at boundaries", () => {
+  const photos = [{ id: 3 }, { id: 8 }, { id: 12 }];
+  assert.equal(adjacentPhoto(photos, 8, -1).id, 3);
+  assert.equal(adjacentPhoto(photos, 8, 1).id, 12);
+  assert.equal(adjacentPhoto(photos, 3, -1), null);
+  assert.equal(adjacentPhoto(photos, 12, 1), null);
+  assert.equal(adjacentPhoto(photos, 99, 1), null);
+});
+
+test("album choices retain empty series and exclude other patients", () => {
+  const sets = [photoSet({ id: 1, photo_count: 0 }), photoSet({ id: 2, patient: 99 })];
+  assert.deepEqual(seriesForPatient(sets, "42").map(set => set.id), [1]);
+  assert.equal(toLocalCapture(null), "");
+  assert.equal(toLocalCapture("invalid"), "");
+  assert.match(toLocalCapture("2026-10-11T09:00:00Z"), /^2026-10-11T\d{2}:00$/);
+});
+
+const { photoSeriesWindow } = load("features/documents/services/patient-photo-navigation.ts");
+
+test("patient lightbox finds its series page without including other series or patients", async () => {
+  const calls = [];
+  const selected = { id: 45, photo_set: 12, patient: 42 };
+  const result = await photoSeriesWindow(selected, "42", async params => {
+    calls.push(params);
+    return params.page === 1 ? { results: [{ id: 44, photo_set: 12 }], next: "page2" } : { results: [selected, { id: 46, photo_set: 12 }], next: "page3" };
+  });
+  assert.equal(result.page, 2);
+  assert.equal(result.next, true);
+  assert.deepEqual(result.photos.map(photo => photo.id), [45, 46]);
+  assert.deepEqual(calls.map(call => [call.patient, call.photo_set, call.page]), [["42", 12, 1], ["42", 12, 2]]);
+});
+
+test("photos without a series stay isolated and never request unrelated images", async () => {
+  const photo = { id: 3, photo_set: null };
+  const result = await photoSeriesWindow(photo, "42", () => { throw new Error("Unexpected fetch"); });
+  assert.deepEqual(result, { photos: [photo], page: 1, next: false });
+});
+
+test("removed photo does not cause endless series pagination", async () => {
+  const photo = { id: 3, photo_set: 7 };
+  let requests = 0;
+  const result = await photoSeriesWindow(photo, "42", async () => { requests++; return { results: [], next: null }; });
+  assert.equal(requests, 1);
+  assert.deepEqual(result.photos, [photo]);
+  assert.equal(result.next, false);
+});

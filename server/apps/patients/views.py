@@ -5,6 +5,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from apps.audit.services import record_audit_event
@@ -95,6 +96,8 @@ class PatientViewSet(viewsets.ModelViewSet):
         )
 
     def perform_destroy(self, instance):
+        if instance.work_leaves.exists():
+            raise ValidationError("Ce dossier contient un certificat médical à conserver. Désactivez le patient plutôt que de supprimer son dossier.")
         old_data = PatientSerializer(instance, context={"request": self.request}).data
         record_audit_event(
             user=self.request.user,

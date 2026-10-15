@@ -1,0 +1,517 @@
+{
+  "validated_at": "2026-10-11T09:49:39.661Z",
+  "database": "clinic_db",
+  "vendor": "postgresql",
+  "created": {
+    "care.Care": 180,
+    "accounts.User": 8,
+    "care.CareType": 3,
+    "audit.AuditLog": 2769,
+    "billing.Invoice": 200,
+    "surgery.Surgery": 60,
+    "care.CareSession": 180,
+    "patients.Patient": 150,
+    "payments.Payment": 150,
+    "payments.Receipt": 120,
+    "care.CareCategory": 1,
+    "agenda.Appointment": 300,
+    "documents.Document": 15,
+    "billing.InvoiceItem": 200,
+    "care.CareObservation": 150,
+    "medical.Consultation": 250,
+    "medical.Prescription": 84,
+    "patients.MedicalAlert": 22,
+    "agenda.AppointmentType": 2,
+    "surgery.SurgeryConsent": 36,
+    "patients.PatientAllergy": 22,
+    "agenda.StaffWorkingHours": 30,
+    "care.CareSessionMaterial": 150,
+    "care.ClinicalMeasurement": 150,
+    "medical.PrescriptionItem": 84,
+    "surgery.AnesthesiaRecord": 36,
+    "surgery.InterventionType": 3,
+    "care.CareSessionParameter": 150,
+    "surgery.SurgeryTeamMember": 120,
+    "documents.DocumentCategory": 1,
+    "notifications.Notification": 60,
+    "payments.PaymentAllocation": 150,
+    "care.CareParameterDefinition": 3,
+    "patients.PatientClinicalNote": 150,
+    "surgery.PostoperativeFollowUp": 36,
+    "patients.PatientMedicalHistory": 150,
+    "surgery.PreoperativeAssessment": 36,
+    "surgery.SurgeryOperativeRecord": 36,
+    "surgery.PostoperativeAssessment": 36,
+    "surgery.PreoperativeRequirement": 36
+  },
+  "api": {
+    "ADMIN:patients/": 200,
+    "ADMIN:dashboard/": 200,
+    "DOCTOR:patients/": 200,
+    "DOCTOR:dashboard/": 200,
+    "NURSE:patients/": 200,
+    "NURSE:dashboard/": 200,
+    "SECRETARY:patients/": 200,
+    "SECRETARY:dashboard/": 200,
+    "ADMIN:consultations/": {
+      "status": 200,
+      "count": 250
+    },
+    "ADMIN:surgeries/": {
+      "status": 200,
+      "count": 60
+    },
+    "ADMIN:cares/": {
+      "status": 200,
+      "count": 180
+    },
+    "ADMIN:care-sessions/": {
+      "status": 200,
+      "count": 180
+    },
+    "ADMIN:appointments/": {
+      "status": 200,
+      "count": 300
+    },
+    "ADMIN:invoices/": {
+      "status": 200,
+      "count": 200
+    },
+    "ADMIN:payments/": {
+      "status": 200,
+      "count": 150
+    },
+    "ADMIN:receipts/": {
+      "status": 200,
+      "count": 120
+    },
+    "ADMIN:documents/": {
+      "status": 200,
+      "count": 15
+    },
+    "ADMIN:notifications/": {
+      "status": 200,
+      "count": 0
+    }
+  },
+  "dashboards": {
+    "ADMIN": {
+      "role": "ADMIN",
+      "today": {
+        "appointments_count": 0
+      },
+      "upcoming": {
+        "surgeries_count": 3
+      },
+      "pending": {
+        "care_workload_count": 30
+      },
+      "financial": {
+        "outstanding_amount": "3579500.00",
+        "overdue_amount": "3219500.00",
+        "paid_today": "0.00",
+        "unpaid_invoices_count": 56,
+        "partially_paid_invoices_count": 90,
+        "overdue_invoices_count": 155
+      },
+      "statistics": {
+        "active_users_count": 8,
+        "notifications_unread_count": 0,
+        "appointments_by_status": {
+          "CANCELLED": 34,
+          "COMPLETED": 171,
+          "NO_SHOW": 35,
+          "CONFIRMED": 30,
+          "SCHEDULED": 30
+        }
+      },
+      "recent_activity": [
+        {
+          "actor": "",
+          "action": "SEED_DEMO_V1",
+          "entity_type": "DemoDataset",
+          "created_at": "2026-10-11T09:44:39.666Z"
+        },
+        {
+          "actor": "Amine Demo 1",
+          "action": "DOCUMENT_UPLOADED",
+          "entity_type": "Document",
+          "created_at": "2026-10-11T09:44:33.276Z"
+        },
+        {
+          "actor": "Amine Demo 1",
+          "action": "DOCUMENT_UPLOADED",
+          "entity_type": "Document",
+          "created_at": "2026-10-11T09:44:33.257Z"
+        },
+        {
+          "actor": "Amine Demo 1",
+          "action": "DOCUMENT_UPLOADED",
+          "entity_type": "Document",
+          "created_at": "2026-10-11T09:44:33.237Z"
+        },
+        {
+          "actor": "Amine Demo 1",
+          "action": "DOCUMENT_UPLOADED",
+          "entity_type": "Document",
+          "created_at": "2026-10-11T09:44:33.220Z"
+        }
+      ]
+    },
+    "DOCTOR": {
+      "role": "DOCTOR",
+      "today": {
+        "appointments_count": 0,
+        "appointments": []
+      },
+      "upcoming": {
+        "appointments_count": 4,
+        "appointments": [
+          {
+            "id": 281,
+            "patient_name": "Lina Demo-Azzul-0131",
+            "appointment_type_name": "DEMO - Consultation",
+            "primary_staff_name": "Samir Demo 1",
+            "start_at": "2026-10-12T11:00:00Z",
+            "status": "SCHEDULED"
+          },
+          {
+            "id": 141,
+            "patient_name": "Karim Demo-Ziri-0141",
+            "appointment_type_name": "DEMO - Consultation",
+            "primary_staff_name": "Samir Demo 1",
+            "start_at": "2026-10-12T13:00:00Z",
+            "status": "SCHEDULED"
+          },
+          {
+            "id": 171,
+            "patient_name": "Yasmine Demo-Azzul-0021",
+            "appointment_type_name": "DEMO - Consultation",
+            "primary_staff_name": "Samir Demo 1",
+            "start_at": "2026-10-14T12:00:00Z",
+            "status": "SCHEDULED"
+          },
+          {
+            "id": 201,
+            "patient_name": "Samir Demo-Ziri-0051",
+            "appointment_type_name": "DEMO - Consultation",
+            "primary_staff_name": "Samir Demo 1",
+            "start_at": "2026-10-17T07:00:00Z",
+            "status": "SCHEDULED"
+          }
+        ],
+        "surgeries_count": 2,
+        "surgeries": [
+          {
+            "id": 1,
+            "patient_name": "Lina Demo-Numid-0001",
+            "procedure_name": "DEMO - Revision cicatricielle",
+            "planned_date": "2026-10-12T09:00:00Z",
+            "status": "PLANNED"
+          },
+          {
+            "id": 31,
+            "patient_name": "Karim Demo-Tiziri-0031",
+            "procedure_name": "DEMO - Revision cicatricielle",
+            "planned_date": "2026-10-14T09:00:00Z",
+            "status": "PLANNED"
+          }
+        ],
+        "postoperative_followups_count": 0
+      },
+      "pending": {
+        "appointments_in_progress_count": 0,
+        "preop_attention_count": 2,
+        "active_care_count": 0
+      },
+      "statistics": {
+        "unread_notifications_count": 20
+      }
+    },
+    "NURSE": {
+      "role": "NURSE",
+      "today": {
+        "appointments_count": 0,
+        "appointments": [],
+        "planned_sessions_count": 0,
+        "completed_sessions_count": 0
+      },
+      "upcoming": {
+        "appointments_count": 6,
+        "appointments": [
+          {
+            "id": 1,
+            "patient_name": "Lina Demo-Numid-0001",
+            "appointment_type_name": "DEMO - Soin infirmier",
+            "primary_staff_name": "Lina Demo 1",
+            "start_at": "2026-10-12T07:00:00Z",
+            "status": "SCHEDULED"
+          },
+          {
+            "id": 226,
+            "patient_name": "Samir Demo-Numid-0076",
+            "appointment_type_name": "DEMO - Soin infirmier",
+            "primary_staff_name": "Lina Demo 1",
+            "start_at": "2026-10-13T07:30:00Z",
+            "status": "CONFIRMED"
+          },
+          {
+            "id": 31,
+            "patient_name": "Karim Demo-Tiziri-0031",
+            "appointment_type_name": "DEMO - Soin infirmier",
+            "primary_staff_name": "Lina Demo 1",
+            "start_at": "2026-10-14T14:00:00Z",
+            "status": "SCHEDULED"
+          },
+          {
+            "id": 256,
+            "patient_name": "Samir Demo-Tiziri-0106",
+            "appointment_type_name": "DEMO - Soin infirmier",
+            "primary_staff_name": "Lina Demo 1",
+            "start_at": "2026-10-15T14:30:00Z",
+            "status": "CONFIRMED"
+          },
+          {
+            "id": 61,
+            "patient_name": "Karim Demo-Numid-0061",
+            "appointment_type_name": "DEMO - Soin infirmier",
+            "primary_staff_name": "Lina Demo 1",
+            "start_at": "2026-10-17T07:00:00Z",
+            "status": "SCHEDULED"
+          }
+        ],
+        "care_sessions_count": 9,
+        "care_sessions": [
+          {
+            "id": 1,
+            "patient_name": "Lina Demo-Numid-0001",
+            "care_type_name": "DEMO - Pansement",
+            "scheduled_at": "2026-10-12T13:00:00Z",
+            "status": "PLANNED",
+            "planned_sessions": 1
+          },
+          {
+            "id": 43,
+            "patient_name": "Karim Demo-Tiziri-0043",
+            "care_type_name": "DEMO - Pansement",
+            "scheduled_at": "2026-10-12T13:00:00Z",
+            "status": "PLANNED",
+            "planned_sessions": 1
+          },
+          {
+            "id": 85,
+            "patient_name": "Lina Demo-Numid-0085",
+            "care_type_name": "DEMO - Pansement",
+            "scheduled_at": "2026-10-12T13:00:00Z",
+            "status": "PLANNED",
+            "planned_sessions": 1
+          },
+          {
+            "id": 127,
+            "patient_name": "Yasmine Demo-Ziri-0127",
+            "care_type_name": "DEMO - Pansement",
+            "scheduled_at": "2026-10-12T13:00:00Z",
+            "status": "PLANNED",
+            "planned_sessions": 1
+          },
+          {
+            "id": 169,
+            "patient_name": "Yasmine Demo-Numid-0019",
+            "care_type_name": "DEMO - Pansement",
+            "scheduled_at": "2026-10-12T13:00:00Z",
+            "status": "PLANNED",
+            "planned_sessions": 1
+          }
+        ]
+      },
+      "pending": {
+        "appointments_in_progress_count": 0,
+        "in_progress_sessions_count": 0,
+        "assigned_care_count": 30
+      },
+      "statistics": {
+        "unread_notifications_count": 20
+      }
+    },
+    "SECRETARY": {
+      "role": "SECRETARY",
+      "today": {
+        "appointments_count": 0,
+        "patients_scheduled_count": 0,
+        "checked_in_count": 0,
+        "appointments": []
+      },
+      "upcoming": {
+        "appointments_count": 14,
+        "appointments": [
+          {
+            "id": 1,
+            "patient_name": "Lina Demo-Numid-0001",
+            "appointment_type_name": "DEMO - Soin infirmier",
+            "primary_staff_name": "Lina Demo 1",
+            "start_at": "2026-10-12T07:00:00Z",
+            "status": "SCHEDULED"
+          },
+          {
+            "id": 281,
+            "patient_name": "Lina Demo-Azzul-0131",
+            "appointment_type_name": "DEMO - Consultation",
+            "primary_staff_name": "Samir Demo 1",
+            "start_at": "2026-10-12T11:00:00Z",
+            "status": "SCHEDULED"
+          },
+          {
+            "id": 141,
+            "patient_name": "Karim Demo-Ziri-0141",
+            "appointment_type_name": "DEMO - Consultation",
+            "primary_staff_name": "Samir Demo 1",
+            "start_at": "2026-10-12T13:00:00Z",
+            "status": "SCHEDULED"
+          },
+          {
+            "id": 226,
+            "patient_name": "Samir Demo-Numid-0076",
+            "appointment_type_name": "DEMO - Soin infirmier",
+            "primary_staff_name": "Lina Demo 1",
+            "start_at": "2026-10-13T07:30:00Z",
+            "status": "CONFIRMED"
+          },
+          {
+            "id": 86,
+            "patient_name": "Karim Demo-Numid-0086",
+            "appointment_type_name": "DEMO - Consultation",
+            "primary_staff_name": "Samir Demo 2",
+            "start_at": "2026-10-13T09:30:00Z",
+            "status": "CONFIRMED"
+          }
+        ]
+      },
+      "pending": {
+        "cancelled_count": 0,
+        "no_show_count": 0
+      },
+      "financial": {
+        "outstanding_amount": "3579500.00",
+        "overdue_amount": "3219500.00",
+        "paid_today": "0.00",
+        "unpaid_invoices_count": 56,
+        "partially_paid_invoices_count": 90,
+        "overdue_invoices_count": 155
+      },
+      "statistics": {
+        "unread_notifications_count": 0
+      }
+    }
+  },
+  "tests": {
+    "backend_sqlite": "156 passed",
+    "seed_tests_latest": "4 passed",
+    "backend_postgresql": "155 passed, 1 skipped (SQLite-specific guard); isolated database, fast hasher only in test process"
+  },
+  "integrity": "passed",
+  "idempotence": "second medium/42 run created no objects",
+  "invoice_statuses": {
+    "PARTIALLY_PAID": 90,
+    "PAID": 30,
+    "DRAFT": 12,
+    "ISSUED": 56,
+    "CANCELLED": 12
+  },
+  "payment_statuses": {
+    "CANCELLED": 15,
+    "COMPLETED": 120,
+    "PENDING": 15
+  },
+  "surgery_statuses": {
+    "CANCELLED": 12,
+    "COMPLETED": 36,
+    "PLANNED": 12
+  },
+  "monthly_new_patients": [
+    {
+      "month": "2026-02-01T00:00:00+01:00",
+      "count": 10
+    },
+    {
+      "month": "2026-03-01T00:00:00+01:00",
+      "count": 16
+    },
+    {
+      "month": "2026-04-01T00:00:00+01:00",
+      "count": 22
+    },
+    {
+      "month": "2026-05-01T00:00:00+01:00",
+      "count": 27
+    },
+    {
+      "month": "2026-06-01T00:00:00+01:00",
+      "count": 21
+    },
+    {
+      "month": "2026-07-01T00:00:00+01:00",
+      "count": 26
+    },
+    {
+      "month": "2026-08-01T00:00:00+01:00",
+      "count": 23
+    },
+    {
+      "month": "2026-09-01T00:00:00+01:00",
+      "count": 5
+    }
+  ],
+  "monthly_completed_payments": [
+    {
+      "month": "2026-03-01T00:00:00+01:00",
+      "count": 3,
+      "amount": "5500.00"
+    },
+    {
+      "month": "2026-04-01T00:00:00+01:00",
+      "count": 8,
+      "amount": "13250.00"
+    },
+    {
+      "month": "2026-05-01T00:00:00+01:00",
+      "count": 14,
+      "amount": "32250.00"
+    },
+    {
+      "month": "2026-06-01T00:00:00+01:00",
+      "count": 13,
+      "amount": "26250.00"
+    },
+    {
+      "month": "2026-07-01T00:00:00+01:00",
+      "count": 19,
+      "amount": "48500.00"
+    },
+    {
+      "month": "2026-08-01T00:00:00+01:00",
+      "count": 40,
+      "amount": "98500.00"
+    },
+    {
+      "month": "2026-09-01T00:00:00+01:00",
+      "count": 23,
+      "amount": "61250.00"
+    }
+  ],
+  "completed_payments_dzd": "285500.00",
+  "unauthenticated_documents_status": 401,
+  "frontend": {
+    "validated": true,
+    "scope": "Read-only smoke checks after user backend restart: admin and doctor login, dashboards, patients, interventions, billing, care, agenda. No form submission workflows tested.",
+    "observed": {
+      "patients": 150,
+      "surgeries": 60,
+      "care_plans": 180,
+      "appointments_week_2026_10_12": 16
+    },
+    "anomalies": [
+      "Care list displays Patient inconnu for some records despite valid patient foreign keys; needs separate frontend investigation."
+    ]
+  },
+  "password_verification": "All eight demo passwords match CLINIC_DEMO_PASSWORD; value not displayed."
+}

@@ -1,5 +1,5 @@
 import { queryString } from "@/features/medical/services/query";
-import { apiRequest } from "@/lib/api-client";
+import { apiBlobRequest, apiRequest } from "@/lib/api-client";
 import type {
   Prescription,
   PrescriptionListParams,
@@ -10,6 +10,25 @@ import type {
 
 export async function listPrescriptions(params: PrescriptionListParams = {}) {
   return apiRequest<PrescriptionPage>(`prescriptions/${queryString(params)}`);
+}
+
+export async function listAllPrescriptions(params: Omit<PrescriptionListParams, "page"> = {}) {
+  const results: Prescription[] = [];
+  let page = 1;
+  let response: PrescriptionPage;
+  do {
+    response = await listPrescriptions({ ...params, page: page++ });
+    results.push(...response.results);
+  } while (response.next);
+  return { count: results.length, next: null, previous: null, results };
+}
+
+export function getPrescriptionPdf(id: number | string) {
+  return apiBlobRequest(`prescriptions/${id}/pdf/`, { cache: "no-store" });
+}
+
+export function getPrescriptionPrintPdf(id: number | string) {
+  return apiBlobRequest(`prescriptions/${id}/print/`, { cache: "no-store" });
 }
 
 export async function getPrescription(id: number | string) {
@@ -29,7 +48,7 @@ export async function deletePrescription(id: number | string) {
 }
 
 export const prescriptionService = {
-  list: listPrescriptions,
+  list: listAllPrescriptions,
   get: getPrescription,
   create: createPrescription,
   update: updatePrescription,

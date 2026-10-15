@@ -9,7 +9,7 @@ class CustomUserAdmin(UserAdmin):
     fieldsets = (
         *UserAdmin.fieldsets,
         (
-            "Clinic profile",
+            "Profil du cabinet",
             {
                 "fields": (
                     "phone",
@@ -24,7 +24,7 @@ class CustomUserAdmin(UserAdmin):
     add_fieldsets = (
         *UserAdmin.add_fieldsets,
         (
-            "Clinic profile",
+            "Profil du cabinet",
             {
                 "fields": (
                     "email",

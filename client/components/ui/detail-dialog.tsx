@@ -8,8 +8,9 @@ interface DetailDialogProps {
   open: boolean;
   onClose: () => void;
   children: ReactNode;
+  wide?: boolean;
 }
-export function DetailDialog({ title, open, onClose, children }: DetailDialogProps) {
+export function DetailDialog({ title, open, onClose, children, wide = false }: DetailDialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   useEffect(() => {
@@ -19,7 +20,7 @@ export function DetailDialog({ title, open, onClose, children }: DetailDialogPro
     if (!open && dialog.open) dialog.close();
   }, [open]);
   return (
-    <dialog ref={ref} className={styles.dialog} aria-labelledby={titleId}
+    <dialog ref={ref} className={`${styles.dialog} ${wide ? styles.wide : ""}`} aria-labelledby={titleId}
       onClose={onClose} onClick={(event) => { if (event.target === event.currentTarget) ref.current?.close(); }}>
       <header className={styles.header}>
         <h2 id={titleId}>{title}</h2>

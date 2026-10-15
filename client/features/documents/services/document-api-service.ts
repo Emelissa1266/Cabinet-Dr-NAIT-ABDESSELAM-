@@ -65,7 +65,7 @@ export function createClinicalPhotoSet(payload: CreateClinicalPhotoSetPayload) {
   return apiRequest<ClinicalPhotoSetApi>("clinical-photo-sets/", { method: "POST", body: payload });
 }
 
-export function updateClinicalPhotoSet(id: number | string, payload: Partial<CreateClinicalPhotoSetPayload>) {
+export function updateClinicalPhotoSet(id: number | string, payload: Partial<Omit<CreateClinicalPhotoSetPayload, "captured_at">> & { captured_at?: string | null }) {
   return apiRequest<ClinicalPhotoSetApi>(`clinical-photo-sets/${id}/`, { method: "PATCH", body: payload });
 }
 
@@ -81,7 +81,7 @@ export function uploadClinicalPhoto(payload: CreateClinicalPhotoPayload) {
   return apiRequest<ClinicalPhotoApi>("clinical-photos/", { method: "POST", body: formData(payload) });
 }
 
-export function updateClinicalPhoto(id: number | string, payload: Partial<Omit<CreateClinicalPhotoPayload, "image">>) {
+export function updateClinicalPhoto(id: number | string, payload: Partial<Omit<CreateClinicalPhotoPayload, "image" | "photo_set" | "captured_at">> & { photo_set?: number | string | null; captured_at?: string | null }) {
   return apiRequest<ClinicalPhotoApi>(`clinical-photos/${id}/`, { method: "PATCH", body: payload });
 }
 
@@ -89,7 +89,7 @@ export function archiveClinicalPhoto(id: number | string, reason: string) {
   return apiRequest<ClinicalPhotoApi>(`clinical-photos/${id}/archive/`, { method: "POST", body: { reason } });
 }
 
-export function fetchClinicalPhotoBlob(id: number | string, mode: "download" | "view" = "view") {
+export function fetchClinicalPhotoBlob(id: number | string, mode: "download" | "view" | "thumbnail" = "view") {
   return apiBlobRequest(`clinical-photos/${id}/${mode}/`);
 }
 
@@ -130,4 +130,11 @@ export function filenameFromHeaders(headers: Headers) {
 
 export function safeFilename(value: string) {
   return value.replace(/[\\/:*?"<>|]+/g, "-").trim() || "document";
+}
+
+export function deleteClinicalPhotoSet(id: number) {
+  return apiRequest<void>(`clinical-photo-sets/${id}/`, { method: "DELETE" });
+}
+export function clinicalPhotoUploadRules() {
+  return apiRequest<{ max_size: number; mime_types: string[] }>("clinical-photos/upload-rules/");
 }

@@ -81,6 +81,15 @@ class PrescriptionItemSerializer(serializers.ModelSerializer):
 
 
 class PrescriptionSerializer(serializers.ModelSerializer):
+    patient_name = serializers.SerializerMethodField()
+    doctor_name = serializers.SerializerMethodField()
+
+    def get_patient_name(self, obj):
+        return f"{obj.patient.first_name} {obj.patient.last_name}".strip()
+
+    def get_doctor_name(self, obj):
+        return obj.doctor.get_full_name() or obj.doctor.username
+
     items = PrescriptionItemSerializer(many=True)
 
     class Meta:
@@ -88,9 +97,11 @@ class PrescriptionSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "patient",
+            "patient_name",
             "consultation",
             "surgery",
             "doctor",
+            "doctor_name",
             "prescribed_at",
             "general_instructions",
             "notes",

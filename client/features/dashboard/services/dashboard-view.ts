@@ -1,7 +1,7 @@
 import type { DashboardApi, DashboardAppointmentPreview, DashboardCareSessionPreview, DashboardSurgeryPreview } from "../api-types";
 
 export const dashboardRoleCopy: Record<DashboardApi["role"], { eyebrow: string; title: string; description: string }> = {
-  ADMIN: { eyebrow: "Administration", title: "Tableau de bord", description: "Vue d’ensemble de la clinique." },
+  ADMIN: { eyebrow: "Administration", title: "Tableau de bord", description: "Vue d’ensemble du cabinet médical." },
   DOCTOR: { eyebrow: "Activité médicale", title: "Tableau de bord", description: "Vue d’ensemble de votre activité médicale." },
   NURSE: { eyebrow: "Soins infirmiers", title: "Tableau de bord", description: "Vue d’ensemble de vos soins et rendez-vous." },
   SECRETARY: { eyebrow: "Accueil et administration", title: "Tableau de bord", description: "Vue d’ensemble de l’activité administrative." },

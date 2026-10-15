@@ -1,4 +1,5 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db.models import Q
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema
 from rest_framework import filters, status, viewsets
@@ -142,7 +143,12 @@ class CareViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         if self.request.user.role == User.Role.NURSE:
-            return queryset.filter(assigned_nurse=self.request.user) | queryset.filter(prescribed_by=self.request.user)
+            # Keep legacy unassigned, nurse-authored plans accessible without
+            # retaining access after the doctor assigns another nurse.
+            return queryset.filter(
+                Q(assigned_nurse=self.request.user)
+                | Q(assigned_nurse__isnull=True, prescribed_by=self.request.user)
+            )
         return queryset
 
 

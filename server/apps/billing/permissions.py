@@ -4,7 +4,7 @@ from apps.accounts.models import User
 
 FINANCIAL_READ_ROLES = {User.Role.ADMIN, User.Role.SECRETARY, User.Role.DOCTOR, User.Role.NURSE}
 FINANCIAL_WRITE_ROLES = {User.Role.ADMIN, User.Role.SECRETARY}
-INVOICE_WRITE_ROLES = {User.Role.ADMIN, User.Role.SECRETARY, User.Role.NURSE}
+INVOICE_WRITE_ROLES = {User.Role.ADMIN, User.Role.SECRETARY, User.Role.DOCTOR, User.Role.NURSE}
 
 
 class FinancialPermission(BasePermission):

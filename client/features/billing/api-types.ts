@@ -43,6 +43,8 @@ export interface InvoiceItemApi {
 export interface InvoiceApi {
   id: number;
   invoice_number: string | null;
+  can_edit: boolean;
+  can_delete: boolean;
   patient: number;
   patient_reference: string;
   patient_name: string;
@@ -164,7 +166,11 @@ export interface BillableServiceListParams {
   ordering?: string;
 }
 
+export type InvoiceFormLine = Omit<CreateInvoiceItemPayload, "invoice"> & { id?: number };
+
 export interface CreateInvoicePayload {
+  lines?: InvoiceFormLine[];
+  emit?: boolean;
   patient: number;
   issue_date?: string;
   due_date?: string | null;

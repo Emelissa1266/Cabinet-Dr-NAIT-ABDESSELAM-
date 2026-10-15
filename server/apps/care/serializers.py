@@ -120,7 +120,7 @@ class CareSerializer(serializers.ModelSerializer):
             self.instance
             and actor.role == User.Role.NURSE
             and self.instance.assigned_nurse_id != actor.id
-            and self.instance.prescribed_by_id != actor.id
+            and not (self.instance.assigned_nurse_id is None and self.instance.prescribed_by_id == actor.id)
         ):
             raise serializers.ValidationError("This care is outside the nurse workspace.")
         instance = self.instance or Care(prescribed_by=actor)
@@ -232,7 +232,9 @@ class CareSessionSerializer(serializers.ModelSerializer):
             setattr(instance, field, value)
         if not self.instance:
             instance.nurse = nurse
-        if instance.care_id and instance.care.assigned_nurse_id != nurse.id and instance.care.prescribed_by_id != nurse.id:
+        if instance.care_id and instance.care.assigned_nurse_id != nurse.id and not (
+            instance.care.assigned_nurse_id is None and instance.care.prescribed_by_id == nurse.id
+        ):
             raise serializers.ValidationError("Only the responsible nurse can register this care session.")
         if instance.care_id and instance.care.status in {Care.Status.COMPLETED, Care.Status.CANCELLED}:
             raise serializers.ValidationError("Completed or cancelled care cannot receive a new session.")

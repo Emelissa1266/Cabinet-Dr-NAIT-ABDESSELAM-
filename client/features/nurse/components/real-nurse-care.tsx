@@ -12,12 +12,12 @@ import {
   createCareSessionParameter,
   createClinicalMeasurement,
   completeCareSession,
-  listCares,
+  listAllCares,
   listCareObservations,
   listCareParameterDefinitions,
   listCareSessionMaterials,
   listCareSessionParameters,
-  listCareSessions,
+  listAllCareSessions,
   listCareTypes,
   listClinicalMeasurements,
   startCareSession,
@@ -139,8 +139,8 @@ export function RealNurseCare({ initialSession }: { initialSession?: string }) {
 
   const loadSessions = useCallback(async () => {
     const [sessionPage, carePage, typePage, patientPage] = await Promise.all([
-      listCareSessions({ ordering: "scheduled_at" }),
-      listCares({ ordering: "-start_date" }),
+      listAllCareSessions({ ordering: "scheduled_at" }),
+      listAllCares({ ordering: "-start_date" }),
       listCareTypes({ is_active: true, ordering: "name" }),
       listPatients({ isActive: true, ordering: "last_name" }),
     ]);
@@ -150,13 +150,40 @@ export function RealNurseCare({ initialSession }: { initialSession?: string }) {
     setCareTypes(typePage.results);
     setPatients(patientPage.results);
     setSelectedId((current) => sessionPage.results.find((session) => session.id === current)?.id ?? sessionPage.results[0]?.id ?? null);
-    setCareForNewSession((current) => current || carePage.results.find((care) => !["COMPLETED", "CANCELLED"].includes(care.status) && care.remaining_sessions > 0)?.id || "");
+    setCareForNewSession((current) => eligibleSessionCares(carePage.results).find((care) => care.id === current)?.id ?? eligibleSessionCares(carePage.results)[0]?.id ?? "");
     setNewCareType((current) => current || typePage.results[0]?.id || "");
     setNewCarePatient((current) => current || patientPage.results[0]?.apiId || "");
   }, []);
 
+  // Reconcile assignments made in another doctor session without a full reload.
+  useEffect(() => {
+    let refreshing = false;
+    const refresh = async () => {
+      if (document.visibilityState !== "visible" || busy || careFormMode || sessionFormOpen || refreshing) return;
+      refreshing = true;
+      try {
+        await loadSessions();
+        setLoadError("");
+      } catch (cause) {
+        setLoadError(careErrorMessage(cause));
+      } finally {
+        refreshing = false;
+      }
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    const timer = window.setInterval(refresh, 30000);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+      window.clearInterval(timer);
+    };
+  }, [busy, careFormMode, sessionFormOpen, loadSessions]);
+
+  const selectedSessionId = selected?.id;
+  const selectedCareType = selected ? careById.get(selected.care)?.care_type : undefined;
   const loadSelectedRecords = useCallback(async () => {
-    if (!selected) {
+    if (!selectedSessionId) {
       setObservations([]);
       setMeasurements([]);
       setMaterials([]);
@@ -165,13 +192,12 @@ export function RealNurseCare({ initialSession }: { initialSession?: string }) {
       setParameterValues({});
       return;
     }
-    const care = careById.get(selected.care);
     const [observationPage, measurementPage, materialPage, parameterPage, definitionPage] = await Promise.all([
-      listCareObservations({ care_session: selected.id, ordering: "-created_at" }),
-      listClinicalMeasurements({ care_session: selected.id, ordering: "-recorded_at" }),
-      listCareSessionMaterials({ care_session: selected.id, ordering: "-created_at" }),
-      listCareSessionParameters({ care_session: selected.id, ordering: "parameter_definition" }),
-      care ? listCareParameterDefinitions({ care_type: care.care_type, active: true, ordering: "key" }) : Promise.resolve({ count: 0, next: null, previous: null, results: [] }),
+      listCareObservations({ care_session: selectedSessionId, ordering: "-created_at" }),
+      listClinicalMeasurements({ care_session: selectedSessionId, ordering: "-recorded_at" }),
+      listCareSessionMaterials({ care_session: selectedSessionId, ordering: "-created_at" }),
+      listCareSessionParameters({ care_session: selectedSessionId, ordering: "parameter_definition" }),
+      selectedCareType ? listCareParameterDefinitions({ care_type: selectedCareType, active: true, ordering: "key" }) : Promise.resolve({ count: 0, next: null, previous: null, results: [] }),
     ]);
     setObservations(observationPage.results);
     setMeasurements(measurementPage.results);
@@ -179,7 +205,7 @@ export function RealNurseCare({ initialSession }: { initialSession?: string }) {
     setDefinitions(definitionPage.results);
     setParameters(parameterPage.results);
     setParameterValues(Object.fromEntries(parameterPage.results.map((parameter) => [parameter.parameter_definition, parameter.value])));
-  }, [careById, selected]);
+  }, [selectedSessionId, selectedCareType]);
 
   useEffect(() => {
     let active = true;

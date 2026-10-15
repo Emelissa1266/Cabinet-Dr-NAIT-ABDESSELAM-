@@ -1,10 +1,18 @@
+from django.http import HttpResponse
+from django.utils import timezone
+from django.utils.cache import patch_vary_headers
+from django.utils.http import content_disposition_header
+from django.utils.text import slugify
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, viewsets
+from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 
 from apps.audit.services import record_audit_event
 
 from .models import Consultation, MedicalInstruction, Prescription
+from .pdf import render_prescription_pdf
 from .permissions import MedicalReadDoctorWritePermission
 from .serializers import (
     ConsultationSerializer,
@@ -72,6 +80,12 @@ class ConsultationViewSet(AuditMixin, viewsets.ModelViewSet):
     audit_create_action = "CONSULTATION_CREATED"
     audit_update_action = "CONSULTATION_UPDATED"
 
+    def perform_destroy(self, instance):
+        if instance.work_leaves.exists():
+            raise ValidationError("Cette consultation est liée à un certificat médical à conserver.")
+        instance.delete()
+
+
 
 @extend_schema_view(
     list=extend_schema(description="List prescriptions. Nurses may read, doctors may modify."),
@@ -98,6 +112,37 @@ class PrescriptionViewSet(AuditMixin, viewsets.ModelViewSet):
     audit_entity_type = "Prescription"
     audit_create_action = "PRESCRIPTION_CREATED"
     audit_update_action = "PRESCRIPTION_UPDATED"
+
+    def _pdf_response(self, *, inline):
+        # get_object applies the same queryset and object permissions as detail.
+        prescription = self.get_object()
+        patient = prescription.patient
+        patient_name = slugify(f"{patient.last_name} {patient.first_name}") or "patient"
+        date = timezone.localtime(prescription.prescribed_at).strftime("%Y-%m-%d")
+        filename = f"Ordonnance_{patient_name}_{date}.pdf"
+        response = HttpResponse(render_prescription_pdf(prescription), content_type="application/pdf")
+        response["Content-Disposition"] = content_disposition_header(not inline, filename)
+        response["Cache-Control"] = "private, no-store, max-age=0"
+        response["Pragma"] = "no-cache"
+        response["X-Content-Type-Options"] = "nosniff"
+        patch_vary_headers(response, ("Cookie", "Authorization"))
+        record_audit_event(
+            user=self.request.user,
+            action="PRESCRIPTION_PRINT_VIEWED" if inline else "PRESCRIPTION_PDF_DOWNLOADED",
+            entity_type="Prescription", entity_id=prescription.pk,
+            request=self.request,
+        )
+        return response
+
+    @extend_schema(responses={(200, "application/pdf"): bytes})
+    @action(detail=True, methods=["get"], url_path="pdf")
+    def pdf(self, request, pk=None):
+        return self._pdf_response(inline=False)
+
+    @extend_schema(responses={(200, "application/pdf"): bytes})
+    @action(detail=True, methods=["get"], url_path="print")
+    def print_pdf(self, request, pk=None):
+        return self._pdf_response(inline=True)
 
 
 @extend_schema_view(

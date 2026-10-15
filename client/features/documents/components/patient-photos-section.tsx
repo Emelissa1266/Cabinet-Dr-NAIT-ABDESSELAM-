@@ -1,438 +1,127 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/features/auth/components/auth-provider";
 import type { Patient } from "@/features/patients/types";
-import ui from "@/components/ui/clinical.module.css";
-import workspace from "@/components/ui/module-workspace.module.css";
-import photoStyles from "@/features/phototheque/components/photo-library.module.css";
-import type {
-  ClinicalPhotoApi,
-  ClinicalPhotoComparisonApi,
-  ClinicalPhotoSetApi,
-  ClinicalPhotoType,
-} from "../api-types";
+import { DetailDialog } from "@/components/ui/detail-dialog";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { PhotoViewer } from "@/features/phototheque/components/photo-viewer";
+import { PhotoEditor, SeriesEditor } from "@/features/phototheque/components/gallery-editors";
+import { SeriesPicker } from "@/features/phototheque/components/gallery-pickers";
+import { PhotoComparisons } from "@/features/phototheque/components/photo-comparisons";
+import type { ClinicalPhotoApi, ClinicalPhotoType } from "../api-types";
+import { archiveClinicalPhoto, getClinicalPhoto, listClinicalPhotos } from "../services/document-api-service";
+import { photoSeriesWindow } from "../services/patient-photo-navigation";
+import { clinicalPhotoErrorMessage } from "../services/photo-workflow";
+import { dateTime, photoTypeLabels } from "../services/document-display";
 import { PrivateClinicalImage } from "./private-clinical-image";
-import {
-  archiveClinicalPhoto,
-  createClinicalPhotoComparison,
-  createClinicalPhotoSet,
-  downloadBlob,
-  fetchClinicalPhotoBlob,
-  listClinicalPhotoComparisons,
-  listClinicalPhotos,
-  listClinicalPhotoSets,
-  uploadClinicalPhoto,
-} from "../services/document-api-service";
-import {
-  dateTime,
-  formatFileSize,
-  localDateTimeInput,
-  photoTypeLabels,
-  viewAngleLabels,
-} from "../services/document-display";
-import {
-  buildPhotoSetPayload,
-  buildPhotoUploadPayload,
-  clinicalPhotoErrorMessage,
-  patientPhotoSets,
-  photoSetOptionLabel,
-  photoSetsForUploadSelector,
-  photoSetSelectState,
-  upsertPhotoSet,
-} from "../services/photo-workflow";
-
-const photoTypes: ClinicalPhotoType[] = ["BEFORE", "AFTER", "PROGRESS", "OTHER"];
+import ui from "@/components/ui/clinical.module.css";
+import styles from "./patient-photos-section.module.css";
 
 export function PatientPhotosSection({ patient }: { patient: Patient }) {
+  // Reset every modal and filter if the dossier changes without a full page reload.
+  return <PatientGallery key={patient.apiId} patient={patient} />;
+}
+
+function PatientGallery({ patient }: { patient: Patient }) {
   const { user } = useAuth();
-  const [sets, setSets] = useState<ClinicalPhotoSetApi[]>([]);
-  const [photos, setPhotos] = useState<ClinicalPhotoApi[]>([]);
-  const [comparisons, setComparisons] = useState<ClinicalPhotoComparisonApi[]>([]);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [selectedSetId, setSelectedSetId] = useState("");
-  const [filter, setFilter] = useState<ClinicalPhotoType | "">("");
-  const [loading, setLoading] = useState(true);
-  const [seriesLoading, setSeriesLoading] = useState(true);
-  const [seriesBusy, setSeriesBusy] = useState(false);
-  const [photoBusy, setPhotoBusy] = useState(false);
-  const [comparisonBusy, setComparisonBusy] = useState(false);
-  const [archiveBusy, setArchiveBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const [galleryError, setGalleryError] = useState("");
-  const [seriesLoadError, setSeriesLoadError] = useState("");
-  const [seriesError, setSeriesError] = useState("");
-  const [photoError, setPhotoError] = useState("");
-  const [comparisonError, setComparisonError] = useState("");
-  const [archiveError, setArchiveError] = useState("");
   const canWrite = user?.role === "DOCTOR" || user?.role === "NURSE";
-  const selected = photos.find((photo) => photo.id === selectedId) ?? photos[0] ?? null;
-  const uploadSeries = useMemo(() => photoSetsForUploadSelector(sets, filter), [filter, sets]);
-  const uploadSeriesState = photoSetSelectState(uploadSeries, seriesLoading, seriesLoadError);
-  const photoCountBySet = useMemo(() => {
-    const counts = new Map<number, number>();
-    photos.forEach((photo) => {
-      if (photo.photo_set) counts.set(photo.photo_set, (counts.get(photo.photo_set) ?? 0) + 1);
-    });
-    return counts;
-  }, [photos]);
-  const photoLabel = useCallback(
-    (photoId: number) => {
-      const photo = photos.find((item) => item.id === photoId);
-      if (!photo) return "Cliché archivé";
-      return `${photoTypeLabels[photo.photo_type]} · ${photo.anatomical_area} · ${dateTime(photo.captured_at || photo.created_at)}`;
-    },
-    [photos],
-  );
-
-  const filtered = useMemo(
-    () => photos.filter((photo) => !filter || photo.photo_type === filter),
-    [filter, photos],
-  );
-
-  const load = useCallback(async (failureMessage = "Impossible de charger la photothèque.") => {
-    setLoading(true);
-    setSeriesLoading(true);
-    setGalleryError("");
-    setSeriesLoadError("");
-    const [setResult, photoResult, comparisonResult] = await Promise.allSettled([
-      listClinicalPhotoSets({ patient: patient.apiId }),
-      listClinicalPhotos({ patient: patient.apiId }),
-      listClinicalPhotoComparisons({ patient: patient.apiId }),
-    ]);
-
-    if (setResult.status === "fulfilled") {
-      const nextSets = patientPhotoSets(setResult.value.results, patient.apiId);
-      setSets(nextSets);
-      setSelectedSetId((current) => (
-        current && nextSets.some((set) => String(set.id) === current) ? current : ""
-      ));
-    } else {
-      setSeriesLoadError(clinicalPhotoErrorMessage(setResult.reason, "Impossible de charger les séries."));
-    }
-
-    if (photoResult.status === "fulfilled") {
-      setPhotos(photoResult.value.results);
-      setSelectedId((current) => current ?? photoResult.value.results[0]?.id ?? null);
-    } else {
-      setGalleryError(clinicalPhotoErrorMessage(photoResult.reason, failureMessage));
-    }
-
-    if (comparisonResult.status === "fulfilled") {
-      setComparisons(comparisonResult.value.results);
-    } else if (photoResult.status === "fulfilled") {
-      setGalleryError(clinicalPhotoErrorMessage(comparisonResult.reason, failureMessage));
-    }
-
-    setSeriesLoading(false);
-    setLoading(false);
-  }, [patient.apiId]);
-
+  const viewerRequest = useRef(0);
+  useEffect(() => () => { viewerRequest.current += 1; }, []);
+  const [photos, setPhotos] = useState<ClinicalPhotoApi[]>([]);
+  const [selected, setSelected] = useState<ClinicalPhotoApi | null>(null);
+  const [navigation, setNavigation] = useState<{ photos: ClinicalPhotoApi[]; page: number; next: boolean }>({ photos: [], page: 1, next: false });
+  const [filter, setFilter] = useState<ClinicalPhotoType | "">("");
+  const [series, setSeries] = useState("");
+  const [page, setPage] = useState(1);
+  const [next, setNext] = useState(false);
+  const [count, setCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [editorBusy, setEditorBusy] = useState(false);
+  const [revision, setRevision] = useState(0);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [newSeries, setNewSeries] = useState(false);
+  const [editor, setEditor] = useState<ClinicalPhotoApi | "new" | null>(null);
+  const [comparing, setComparing] = useState(false);
+  const [archiving, setArchiving] = useState<ClinicalPhotoApi | null>(null);
+  const [archiveError, setArchiveError] = useState("");
+  const patientId = String(patient.apiId);
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void load();
+    let active = true;
+    const timer = setTimeout(async () => {
+      setLoading(true); setError("");
+      try {
+        const result = await listClinicalPhotos({ patient: patientId, photo_type: filter, photo_set: series || undefined, page, ordering: "-captured_at,-created_at" });
+        if (active) { setPhotos(result.results); setNext(Boolean(result.next)); setCount(result.count); }
+      } catch (cause) { if (active) setError(clinicalPhotoErrorMessage(cause, "Impossible de charger la galerie.")); }
+      finally { if (active) setLoading(false); }
     }, 0);
-    return () => window.clearTimeout(timer);
-  }, [load]);
-
-  async function submitSet(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formElement = event.currentTarget;
-    const form = new FormData(event.currentTarget);
-    setSeriesBusy(true);
-    setSeriesError("");
-    setGalleryError("");
-    setMessage("");
-    let created: ClinicalPhotoSetApi | null = null;
+    return () => { active = false; clearTimeout(timer); };
+  }, [patientId, filter, series, page, revision]);
+  function refresh(text: string) { setMessage(text); setRevision(value => value + 1); }
+  async function open(photo: ClinicalPhotoApi) {
+    const request = ++viewerRequest.current;
+    setBusy(true); setError("");
     try {
-      created = await createClinicalPhotoSet(buildPhotoSetPayload(patient.apiId, {
-        title: form.get("title"),
-        anatomical_area: form.get("anatomical_area"),
-        captured_at: form.get("captured_at"),
-        notes: form.get("notes"),
-      }));
-    } catch (cause) {
-      setSeriesError(clinicalPhotoErrorMessage(cause, "Impossible de créer la série."));
-      return;
-    } finally {
-      setSeriesBusy(false);
-    }
-
-    formElement.reset();
-    setSets((current) => upsertPhotoSet(current, created));
-    setSelectedSetId(String(created.id));
-    setSeriesLoadError("");
-    setMessage("Série créée avec succès.");
-    await load("La série a été créée, mais la liste n’a pas pu être actualisée.");
+      const detail = await getClinicalPhoto(photo.id);
+      const window = await photoSeriesWindow(detail, patientId);
+      if (request === viewerRequest.current) { setNavigation(window); setSelected(detail); }
+    } catch (cause) { setError(clinicalPhotoErrorMessage(cause, "Impossible d’ouvrir cette photo.")); }
+    finally { setBusy(false); }
   }
-
-  async function submitPhoto(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formElement = event.currentTarget;
-    const form = new FormData(event.currentTarget);
-    const image = form.get("image");
-    if (!(image instanceof File) || !image.name) {
-      setPhotoError("Sélectionnez une image clinique.");
-      return;
-    }
-    setPhotoBusy(true);
-    setPhotoError("");
-    setGalleryError("");
-    setMessage("");
-    let photo: ClinicalPhotoApi | null = null;
+  const index = navigation.photos.findIndex(photo => photo.id === selected?.id);
+  async function navigate(direction: -1 | 1) {
+    if (!selected || busy) return;
+    const request = ++viewerRequest.current;
+    setBusy(true); setError("");
     try {
-      photo = await uploadClinicalPhoto(buildPhotoUploadPayload(patient.apiId, {
-        photo_type: form.get("photo_type"),
-        anatomical_area: form.get("anatomical_area"),
-        view_angle: form.get("view_angle"),
-        photo_set: selectedSetId,
-        captured_at: form.get("captured_at"),
-        description: form.get("description"),
-        notes: form.get("notes"),
-      }, image));
-    } catch (cause) {
-      setPhotoError(clinicalPhotoErrorMessage(cause, "Impossible d’importer la photo."));
-      return;
-    } finally {
-      setPhotoBusy(false);
-    }
-
-    formElement.reset();
-    setSelectedId(photo.id);
-    setMessage("Photo clinique importée dans le stockage privé.");
-    await load("La photo a été importée, mais la photothèque n’a pas pu être actualisée.");
+      let candidate = navigation.photos[index + direction];
+      if (!candidate && selected.photo_set) {
+        const targetPage = navigation.page + direction;
+        const result = await listClinicalPhotos({ patient: patientId, photo_set: selected.photo_set, page: targetPage, ordering: "-captured_at,-created_at" });
+        candidate = direction === 1 ? result.results[0] : result.results[result.results.length - 1];
+        setNavigation({ photos: result.results, page: targetPage, next: Boolean(result.next) });
+      }
+      if (candidate) { const detail = await getClinicalPhoto(candidate.id); if (request === viewerRequest.current) setSelected(detail); }
+    } catch (cause) { setError(clinicalPhotoErrorMessage(cause, "Navigation impossible.")); }
+    finally { setBusy(false); }
   }
-
-  async function createComparison(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formElement = event.currentTarget;
-    const form = new FormData(event.currentTarget);
-    setComparisonBusy(true);
-    setComparisonError("");
-    setGalleryError("");
-    setMessage("");
+  async function archive(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); if (!archiving) return;
+    const reason = String(new FormData(event.currentTarget).get("reason") || "").trim();
+    setBusy(true); setArchiveError("");
     try {
-      await createClinicalPhotoComparison({
-        patient: patient.apiId,
-        before_photo: String(form.get("before_photo") || ""),
-        after_photo: String(form.get("after_photo") || ""),
-        notes: String(form.get("notes") || "").trim(),
-      });
-    } catch (cause) {
-      setComparisonError(clinicalPhotoErrorMessage(cause, "Impossible de créer la comparaison."));
-      return;
-    } finally {
-      setComparisonBusy(false);
-    }
-
-    formElement.reset();
-    setMessage("Comparaison enregistrée.");
-    await load("La comparaison a été créée, mais la photothèque n’a pas pu être actualisée.");
+      await archiveClinicalPhoto(archiving.id, reason); setArchiving(null);
+      if (photos.length === 1 && page > 1) setPage(value => value - 1);
+      refresh("Photo archivée. Le fichier et l’historique médical sont conservés.");
+    } catch (cause) { setArchiveError(clinicalPhotoErrorMessage(cause, "Archivage refusé.")); }
+    finally { setBusy(false); }
   }
-
-  async function archive(photo: ClinicalPhotoApi) {
-    const reason = window.prompt("Motif d’archivage");
-    if (!reason) return;
-    setArchiveBusy(true);
-    setArchiveError("");
-    setGalleryError("");
-    setMessage("");
-    try {
-      await archiveClinicalPhoto(photo.id, reason);
-    } catch (cause) {
-      setArchiveError(clinicalPhotoErrorMessage(cause, "Impossible d’archiver la photo."));
-      return;
-    } finally {
-      setArchiveBusy(false);
-    }
-
-    setMessage("Photo archivée.");
-    await load("La photo a été archivée, mais la photothèque n’a pas pu être actualisée.");
-  }
-
-  async function download(photo: ClinicalPhotoApi) {
-    try {
-      await downloadBlob(fetchClinicalPhotoBlob(photo.id, "download"), photo.original_filename || `photo-${photo.id}.jpg`);
-    } catch (cause) {
-      setArchiveError(clinicalPhotoErrorMessage(cause, "Impossible de télécharger la photo."));
-    }
-  }
-
-  return (
-    <section className={ui.panel}>
-      <div className={ui.heading}>
-        <div>
-          <p className={ui.eyebrow}>Images privées</p>
-          <h2>Photothèque clinique</h2>
-        </div>
-        <div className={ui.tabs}>
-          {(["", ...photoTypes] as Array<ClinicalPhotoType | "">).map((value) => (
-            <button key={value || "all"} className={ui.tab} aria-pressed={filter === value} onClick={() => setFilter(value)}>
-              {value ? photoTypeLabels[value] : "Toutes"}
-            </button>
-          ))}
-        </div>
-      </div>
-      {message && <p className={workspace.feedback}>{message}</p>}
-      {galleryError && <p role="alert">{galleryError}</p>}
-      {canWrite && (
-        <div className={workspace.twoColumns}>
-          <form className={ui.form} onSubmit={submitSet}>
-            <fieldset className={workspace.fieldset}>
-              <legend>Nouvelle série</legend>
-              <label>Titre<input name="title" required /></label>
-              <label>Zone anatomique<input name="anatomical_area" required /></label>
-              <label>Date de prise<input name="captured_at" type="datetime-local" defaultValue={localDateTimeInput()} /></label>
-              <label>Notes<textarea name="notes" /></label>
-              {seriesError && <p role="alert">{seriesError}</p>}
-              <button className={ui.action} disabled={seriesBusy}>{seriesBusy ? "Création…" : "Créer série"}</button>
-            </fieldset>
-          </form>
-          <form className={ui.form} onSubmit={submitPhoto}>
-            <fieldset className={workspace.fieldset}>
-              <legend>Importer une photo</legend>
-              <label>Série
-                <select
-                  name="photo_set"
-                  value={selectedSetId}
-                  onChange={(event) => setSelectedSetId(event.target.value)}
-                  disabled={seriesLoading}
-                  aria-invalid={uploadSeriesState === "failed" || undefined}
-                  aria-describedby="photo-series-status"
-                >
-                  <option value="">Sans série</option>
-                  {uploadSeries.map((set) => <option key={set.id} value={set.id}>{photoSetOptionLabel(set)}</option>)}
-                </select>
-              </label>
-              {uploadSeriesState === "loading" && <small id="photo-series-status" role="status">Chargement des séries…</small>}
-              {uploadSeriesState === "empty" && <small id="photo-series-status">Aucune série créée pour ce patient.</small>}
-              {uploadSeriesState === "failed" && <p id="photo-series-status" role="alert">{seriesLoadError}</p>}
-              <label>Type
-                <select name="photo_type" required>
-                  {photoTypes.map((type) => <option key={type} value={type}>{photoTypeLabels[type]}</option>)}
-                </select>
-              </label>
-              <label>Zone anatomique<input name="anatomical_area" required /></label>
-              <label>Vue
-                <select name="view_angle" defaultValue="OTHER">
-                  {Object.entries(viewAngleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                </select>
-              </label>
-              <label>Date<input name="captured_at" type="datetime-local" defaultValue={localDateTimeInput()} /></label>
-              <label>Image<input name="image" type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" required /></label>
-              <label>Description<textarea name="description" /></label>
-              {photoError && <p role="alert">{photoError}</p>}
-              <button className={`${ui.action} ${ui.primary}`} disabled={photoBusy}>{photoBusy ? "Import…" : "Importer photo"}</button>
-            </fieldset>
-          </form>
-        </div>
-      )}
-      {loading ? <p role="status">Chargement des clichés…</p> : (
-        <div className={workspace.twoColumns}>
-          <div className={photoStyles.grid}>
-            {sets.length > 0 && (
-              <section className={workspace.section}>
-                <h3>Séries</h3>
-                <ul className={workspace.list}>
-                  {sets.map((set) => {
-                    const count = photoCountBySet.get(set.id) ?? 0;
-                    return (
-                      <li key={set.id}>
-                        <strong>{set.title}</strong>
-                        <small>{set.anatomical_area}{set.captured_at ? ` · ${dateTime(set.captured_at)}` : ""}</small>
-                        <small>{count > 0 ? `${count} photo${count > 1 ? "s" : ""}` : "Aucune photo dans cette série."}</small>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
-            )}
-            {filtered.map((photo) => (
-              <button
-                key={photo.id}
-                className={photoStyles.card}
-                onClick={() => setSelectedId(photo.id)}
-                aria-label={`Ouvrir ${photoTypeLabels[photo.photo_type]} ${photo.anatomical_area}`}
-              >
-                <div className={photoStyles.image}>
-                  <PrivateClinicalImage
-                    photoId={photo.id}
-                    alt={`${photoTypeLabels[photo.photo_type]} ${photo.anatomical_area}`}
-                  />
-                  <span className={photoStyles.phase}><StatusBadge tone={photo.photo_type === "BEFORE" ? "neutral" : "teal"}>{photoTypeLabels[photo.photo_type]}</StatusBadge></span>
-                </div>
-                <div className={photoStyles.caption}>
-                  <strong>{photo.anatomical_area}</strong>
-                  <span>{dateTime(photo.captured_at || photo.created_at)}</span>
-                  <small>{formatFileSize(photo.file_size)} · {photo.width}×{photo.height}</small>
-                </div>
-              </button>
-            ))}
-            {!filtered.length && <p className={ui.empty}>Aucun cliché pour ce patient.</p>}
-          </div>
-          <aside className={workspace.stack}>
-            {selected ? (
-              <section>
-                <PrivateClinicalImage
-                  className={photoStyles.viewer}
-                  photoId={selected.id}
-                  alt={`${photoTypeLabels[selected.photo_type]} ${selected.anatomical_area}`}
-                />
-                <dl>
-                  <dt>Type</dt><dd>{photoTypeLabels[selected.photo_type]}</dd>
-                  <dt>Zone</dt><dd>{selected.anatomical_area}</dd>
-                  <dt>Vue</dt><dd>{viewAngleLabels[selected.view_angle]}</dd>
-                  <dt>Date</dt><dd>{dateTime(selected.captured_at || selected.created_at)}</dd>
-                  <dt>Fichier</dt><dd>{selected.original_filename}</dd>
-                  <dt>Notes</dt><dd>{selected.notes || selected.description || "Aucune note."}</dd>
-                </dl>
-                <div className={ui.actions}>
-                  <button className={ui.action} onClick={() => void download(selected)}>Télécharger</button>
-                  {canWrite && <button className={ui.action} disabled={archiveBusy} onClick={() => void archive(selected)}>Archiver</button>}
-                </div>
-                {archiveError && <p role="alert">{archiveError}</p>}
-              </section>
-            ) : <p>Aucun cliché sélectionné.</p>}
-            {canWrite && photos.some((photo) => photo.photo_type === "BEFORE") && photos.some((photo) => photo.photo_type !== "BEFORE") && (
-              <form className={ui.form} onSubmit={createComparison}>
-                <fieldset className={workspace.fieldset}>
-                  <legend>Comparaison</legend>
-                  <label>Avant
-                    <select name="before_photo" required>
-                      {photos.filter((photo) => photo.photo_type === "BEFORE").map((photo) => (
-                        <option key={photo.id} value={photo.id}>{photo.anatomical_area} · {dateTime(photo.captured_at || photo.created_at)}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>Après / évolution
-                    <select name="after_photo" required>
-                      {photos.filter((photo) => photo.photo_type === "AFTER" || photo.photo_type === "PROGRESS").map((photo) => (
-                        <option key={photo.id} value={photo.id}>{photoTypeLabels[photo.photo_type]} · {photo.anatomical_area}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>Notes<textarea name="notes" /></label>
-                  {comparisonError && <p role="alert">{comparisonError}</p>}
-                  <button className={ui.action} disabled={comparisonBusy}>Créer comparaison</button>
-                </fieldset>
-              </form>
-            )}
-            <section>
-              <h3>Comparaisons enregistrées</h3>
-              <ul className={workspace.list}>
-                {comparisons.map((comparison) => (
-                  <li key={comparison.id}>
-                    <strong>{photoLabel(comparison.before_photo)} → {photoLabel(comparison.after_photo)}</strong>
-                    <small>{dateTime(comparison.created_at)} · {comparison.notes || "Sans note"}</small>
-                  </li>
-                ))}
-                {!comparisons.length && <li>Aucune comparaison persistée.</li>}
-              </ul>
-            </section>
-          </aside>
-        </div>
-      )}
-    </section>
-  );
+  return <section className={`${ui.panel} ${styles.container}`} aria-label="Photothèque médicale du patient">
+    <div className={ui.heading}><div><p className={ui.eyebrow}>Images privées</p><h2>Photothèque médicale</h2></div>
+      {canWrite && <div className={ui.actions}><button className={ui.action} onClick={() => setNewSeries(true)}>+ Créer une série</button><button className={`${ui.action} ${ui.primary}`} onClick={() => setEditor("new")}>+ Ajouter une photo</button></div>}
+    </div>
+    <div className={styles.toolbar}><div className={ui.tabs}>{(["", "BEFORE", "AFTER", "PROGRESS", "OTHER"] as const).map(value => <button key={value} className={ui.tab} aria-pressed={filter === value} onClick={() => { setFilter(value); setPage(1); }}>{value ? photoTypeLabels[value] : "Toutes"}</button>)}</div>
+      {canWrite && <button className={ui.action} onClick={() => setComparing(true)}>Comparer Avant / Après</button>}
+    </div>
+    <div className={`${ui.form} ${styles.series}`}><SeriesPicker key={revision} patient={patientId} value={series} onChange={id => { setSeries(id); setPage(1); }} /></div>
+    {message && <p role="status" className={styles.feedback}>{message}</p>}
+    {error && <p role="alert">{error}<button className={ui.action} onClick={() => setRevision(value => value + 1)}>Réessayer</button></p>}
+    {loading ? <p role="status">Chargement des photographies…</p> : !error && <>
+      <div className={styles.grid}>{photos.map(photo => <button key={photo.id} className={styles.card} disabled={busy} onClick={() => void open(photo)} aria-label={`Ouvrir ${photoTypeLabels[photo.photo_type]} ${photo.anatomical_area} · ${photo.id}`}>
+        <div className={styles.thumbnail}><PrivateClinicalImage photoId={photo.id} thumbnail alt={`${photoTypeLabels[photo.photo_type]} · ${photo.anatomical_area}`} /><span className={styles.badge}><StatusBadge tone={photo.photo_type === "BEFORE" ? "neutral" : "teal"}>{photoTypeLabels[photo.photo_type]}</StatusBadge></span></div>
+        <div className={styles.caption}><strong>{photo.anatomical_area}</strong><span>{dateTime(photo.captured_at || photo.created_at)}</span></div>
+      </button>)}</div>
+      {!photos.length && <p className={ui.empty}>Aucune photographie pour cette sélection.</p>}
+      <footer className={ui.footer}><span>{count} photographie(s)</span><div className={ui.actions}><button className={ui.action} disabled={page === 1} onClick={() => setPage(value => value - 1)}>Précédent</button><span>Page {page}</span><button className={ui.action} disabled={!next} onClick={() => setPage(value => value + 1)}>Suivant</button></div></footer>
+    </>}
+    <section className={styles.saved}><h3>Comparaisons enregistrées</h3><PhotoComparisons key={revision} patientId={patientId} fixedPatient canWrite={false} /></section>
+    {selected && <PhotoViewer photo={selected} canWrite={canWrite} archiveLabel="Archiver" previous={!busy && (index > 0 || navigation.page > 1)} next={!busy && (index < navigation.photos.length - 1 || navigation.next)} onPrevious={() => void navigate(-1)} onNext={() => void navigate(1)} onClose={() => { viewerRequest.current += 1; setSelected(null); }} onEdit={() => { setEditor(selected); setSelected(null); }} onArchive={() => { setArchiveError(""); setArchiving(selected); setSelected(null); }} />}
+    <DetailDialog title="Créer une série" open={newSeries} onClose={() => { if (!editorBusy) setNewSeries(false); }}>{newSeries && <SeriesEditor patientId={patientId} fixedPatient onBusy={setEditorBusy} onCancel={() => setNewSeries(false)} onSave={value => { setNewSeries(false); setSeries(String(value.id)); setPage(1); refresh("Série créée."); }} />}</DetailDialog>
+    <DetailDialog title={editor === "new" ? "Ajouter des photos" : "Modifier la photographie"} open={Boolean(editor)} onClose={() => { if (!editorBusy) setEditor(null); }}>{editor && <PhotoEditor patientId={patientId} fixedPatient photo={editor === "new" ? undefined : editor} onBusy={setEditorBusy} onCancel={() => setEditor(null)} onPartial={() => refresh("Les photos importées sont disponibles.")} onSave={() => { const created = editor === "new"; setEditor(null); if (created) { setSeries(""); setFilter(""); setPage(1); } refresh(created ? "Photographies importées." : "Informations modifiées."); }} />}</DetailDialog>
+    <DetailDialog title="Comparer Avant / Après" open={comparing} onClose={() => { if (!editorBusy) setComparing(false); }}>{comparing && <PhotoComparisons patientId={patientId} fixedPatient canWrite onBusy={setEditorBusy} onSaved={() => { setComparing(false); refresh("Comparaison enregistrée."); }} />}</DetailDialog>
+    <DetailDialog title="Archiver la photographie" open={Boolean(archiving)} onClose={() => { if (!busy) setArchiving(null); }}><form className={ui.form} onSubmit={archive}><p>La photo sera retirée de la galerie active. Le fichier et l’historique médical seront conservés.</p><label>Motif d’archivage<textarea name="reason" required disabled={busy} /></label>{archiveError && <p role="alert">{archiveError}</p>}<div className={ui.actions}><button className={`${ui.action} ${ui.primary}`} disabled={busy}>{busy ? "Archivage…" : "Confirmer l’archivage"}</button><button type="button" className={ui.action} disabled={busy} onClick={() => setArchiving(null)}>Annuler</button></div></form></DetailDialog>
+  </section>;
 }

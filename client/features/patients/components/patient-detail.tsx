@@ -12,6 +12,7 @@ import { PatientCareSection } from "@/features/care/components/patient-care-sect
 import { PatientDocumentsSection } from "@/features/documents/components/patient-documents-section";
 import { PatientPhotosSection } from "@/features/documents/components/patient-photos-section";
 import { PatientSurgerySection } from "@/features/interventions/components/patient-surgery-section";
+import { WorkLeavesWorkspace } from "@/features/work-leaves/components/work-leaves-workspace";
 import { PatientPhase9ESections } from "@/features/medical/components/patient-phase-9e-sections";
 import { MedicalAlertsPanel, MedicalAlertsSummary } from "./medical-alerts-panel";
 import { PatientAppointmentsSection } from "./patient-appointments-section";
@@ -22,7 +23,7 @@ import { PatientForm } from "./patient-form";
 import ui from "@/components/ui/clinical.module.css";
 import styles from "./patient-detail.module.css";
 
-const tabs = ["Vue générale", "Médical", "Rendez-vous", "Interventions", "Ordonnances", "Soins", "Photos", "Documents", "Paiements"];
+const baseTabs = ["Vue générale", "Médical", "Rendez-vous", "Interventions", "Ordonnances", "Soins", "Photos", "Documents", "Paiements"];
 
 function formatDate(value: string | null) {
   if (!value) return "Non renseignée";
@@ -36,6 +37,7 @@ function dateTime(value: string) {
 export function PatientDetail({ id, basePath = "/patients" }: { id: string; basePath?: string }) {
   const { user } = useAuth();
   const router = useRouter();
+  const tabs = user?.role === "DOCTOR" ? [...baseTabs.slice(0, 5), "Arrêts de travail", ...baseTabs.slice(5)] : baseTabs;
   const [patient, setPatient] = useState<Patient | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -118,12 +120,12 @@ export function PatientDetail({ id, basePath = "/patients" }: { id: string; base
         {canReadMedicalAlerts && <MedicalAlertsSummary patientId={patient.apiId} compact />}
         <div className={styles.tabs} role="tablist" aria-label="Sections du dossier patient">{tabs.map((name, index) => <button id={`patient-tab-${index}`} key={name} role="tab" aria-selected={tab === name} aria-controls="patient-section" tabIndex={tab === name ? 0 : -1} onKeyDown={(event) => { if (event.key === "ArrowRight" || event.key === "ArrowLeft") { event.preventDefault(); const next = (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length; setTab(tabs[next]); document.getElementById(`patient-tab-${next}`)?.focus(); } }} onClick={() => setTab(name)}>{name}</button>)}</div>
       </header>
-      <div id="patient-section" role="tabpanel" aria-labelledby={`patient-tab-${tabs.indexOf(tab)}`} className={styles.columns}>
+      <div id="patient-section" role="tabpanel" aria-labelledby={`patient-tab-${tabs.indexOf(tab)}`} className={`${styles.columns} ${tab === "Photos" ? styles.photoColumns : ""}`}>
         <div className={styles.stack}>
           {show("Médical") && <section className={ui.panel}><h2>Informations essentielles</h2><dl className={styles.info}><dt>Téléphone</dt><dd>{patient.phone || "Non renseigné"}</dd><dt>Email personnel</dt><dd>{patient.email || "Non renseigné"}</dd><dt>Date de naissance</dt><dd>{formatDate(patient.dateOfBirth)}</dd><dt>Ville</dt><dd>{patient.city || "Non renseignée"}</dd><dt>Profession</dt><dd>{patient.profession || "Non renseignée"}</dd><dt>Contact d’urgence</dt><dd>{patient.emergencyContact || "Non renseigné"} {patient.emergencyPhone}</dd></dl></section>}
           {show("Médical") && (canReadMedicalAlerts ? <MedicalAlertsPanel patient={patient} /> : <section className={ui.panel}><h2>Alertes médicales</h2><p>Informations médicales non disponibles pour votre rôle.</p></section>)}
           {show("Photos") && canReadPhotos && <PatientPhotosSection patient={patient} />}
-          {tab === "Photos" && !canReadPhotos && <section className={ui.panel}><h2>Photothèque clinique</h2><p>Les photos cliniques ne sont pas disponibles pour votre rôle.</p></section>}
+          {tab === "Photos" && !canReadPhotos && <section className={ui.panel}><h2>Photothèque médicale</h2><p>Les photos cliniques ne sont pas disponibles pour votre rôle.</p></section>}
         </div>
         <div className={styles.stack}>
           {show("Rendez-vous") && <PatientAppointmentsSection patient={patient} basePath={basePath} />}
@@ -133,6 +135,7 @@ export function PatientDetail({ id, basePath = "/patients" }: { id: string; base
           {show("Médical") && <PatientPhase9ESections patient={patient} mode="medical" />}
           {tab === "Vue générale" && <section className={ui.panel}><h2>Activité récente</h2><p>Dossier créé le {dateTime(patient.createdAt)}.</p><p>Dernière mise à jour le {dateTime(patient.updatedAt)}.</p></section>}
           {tab === "Ordonnances" && <PatientPhase9ESections patient={patient} mode="prescriptions" />}
+          {show("Arrêts de travail") && user?.role === "DOCTOR" && <WorkLeavesWorkspace patient={patient} />}
           {show("Soins") && canReadCare && <PatientCareSection patient={patient} />}
           {tab === "Soins" && !canReadCare && <section className={ui.panel}><h2>Soins</h2><p>Les soins cliniques ne sont pas disponibles pour votre rôle.</p></section>}
           {show("Paiements") && canReadBilling && <PatientFinancialSection patient={patient} />}

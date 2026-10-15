@@ -5,9 +5,8 @@ from apps.accounts.models import User
 
 from .models import BillableService, Invoice, InvoiceItem
 from .services import (
-    create_invoice,
     create_invoice_item,
-    update_invoice_discount,
+    save_invoice_form,
     update_invoice_item,
 )
 
@@ -94,8 +93,39 @@ class InvoiceItemSerializer(serializers.ModelSerializer):
             raise_drf_validation(error)
 
 
+class InvoiceFormLineSerializer(InvoiceItemSerializer):
+    id = serializers.IntegerField(required=False, min_value=1)
+
+    class Meta(InvoiceItemSerializer.Meta):
+        fields = tuple(field for field in InvoiceItemSerializer.Meta.fields if field != "invoice")
+        read_only_fields = tuple(field for field in InvoiceItemSerializer.Meta.read_only_fields if field != "id")
+
+    def validate(self, attrs):
+        user = self.context["request"].user
+        if user.role == User.Role.NURSE:
+            care, session = attrs.get("care"), attrs.get("care_session")
+            if care and care.assigned_nurse_id != user.pk:
+                raise serializers.ValidationError("This care is outside the nurse workspace.")
+            if session and session.nurse_id != user.pk:
+                raise serializers.ValidationError("This care session is outside the nurse workspace.")
+        return attrs
+
+
 class InvoiceSerializer(serializers.ModelSerializer):
     items = InvoiceItemSerializer(many=True, read_only=True)
+    lines = InvoiceFormLineSerializer(many=True, write_only=True, required=False, allow_empty=False)
+    emit = serializers.BooleanField(write_only=True, required=False, default=False)
+    can_edit = serializers.SerializerMethodField()
+    can_delete = serializers.SerializerMethodField()
+
+    def get_can_edit(self, obj):
+        user = self.context["request"].user
+        return (obj.status == Invoice.Status.DRAFT and not obj.allocations.exists()
+                and (user.role != User.Role.NURSE or obj.created_by_id == user.pk))
+
+    def get_can_delete(self, obj):
+        return self.get_can_edit(obj)
+
     patient_reference = serializers.CharField(source="patient.patient_reference", read_only=True)
     patient_name = serializers.SerializerMethodField()
     subtotal = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
@@ -133,6 +163,10 @@ class InvoiceSerializer(serializers.ModelSerializer):
             "remaining_amount",
             "is_overdue",
             "items",
+            "lines",
+            "emit",
+            "can_edit",
+            "can_delete",
             "created_at",
             "updated_at",
         )
@@ -167,7 +201,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         try:
-            return create_invoice(
+            return save_invoice_form(
                 actor=self.context["request"].user,
                 request=self.context.get("request"),
                 **validated_data,
@@ -176,24 +210,11 @@ class InvoiceSerializer(serializers.ModelSerializer):
             raise_drf_validation(error)
 
     def update(self, instance, validated_data):
-        if instance.status != Invoice.Status.DRAFT:
-            raise serializers.ValidationError("Only draft invoices can be edited.")
-        if "discount_amount" in validated_data:
-            discount = validated_data.pop("discount_amount")
-            instance = update_invoice_discount(
-                invoice=instance,
-                discount_amount=discount,
-                actor=self.context["request"].user,
-                request=self.context.get("request"),
-            )
-        for field, value in validated_data.items():
-            setattr(instance, field, value)
         try:
-            instance.full_clean()
+            return save_invoice_form(invoice=instance, actor=self.context["request"].user,
+                                     request=self.context.get("request"), **validated_data)
         except DjangoValidationError as error:
             raise_drf_validation(error)
-        instance.save()
-        return instance
 
 
 class CancelInvoiceSerializer(serializers.Serializer):

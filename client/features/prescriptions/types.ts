@@ -19,6 +19,8 @@ export interface PrescriptionItem {
 
 export interface Prescription {
   id: number;
+  patient_name: string;
+  doctor_name: string;
   patient: number;
   consultation: number | null;
   surgery: number | null;

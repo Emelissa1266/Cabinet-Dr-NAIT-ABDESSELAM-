@@ -1,5 +1,9 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
+from io import BytesIO
+
 from django.http import FileResponse
+from django.db.models import Count, OuterRef, Q, Subquery
+from django.http import Http404
 from django.utils.http import content_disposition_header
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema
@@ -32,8 +36,8 @@ from .serializers import (
     DocumentCategorySerializer,
     DocumentSerializer,
 )
-from .services import archive_clinical_photo, archive_document, audit_file_access
-from .validators import sanitize_filename
+from .services import archive_clinical_photo, archive_document, audit_file_access, delete_photo_set
+from .validators import clinical_photo_max_size, sanitize_filename, sanitized_image_bytes
 
 
 def drf_validation(error):
@@ -135,7 +139,7 @@ class DocumentViewSet(viewsets.ModelViewSet):
             "surgery_consent",
             "preoperative_requirement",
         )
-        if "is_archived" not in self.request.query_params and self.action not in {"retrieve", "archive", "download", "view"}:
+        if "is_archived" not in self.request.query_params and self.action not in {"retrieve", "archive", "download", "view", "thumbnail"}:
             queryset = queryset.filter(is_archived=False)
         role = getattr(self.request.user, "role", None)
         if role == User.Role.SECRETARY:
@@ -194,23 +198,44 @@ class DocumentViewSet(viewsets.ModelViewSet):
         return Response({"detail": "Documents are archived, not deleted."}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
-class ClinicalPhotoSetViewSet(viewsets.ModelViewSet):
+class PrivatePhotoResponseMixin:
+    def finalize_response(self, request, response, *args, **kwargs):
+        response = super().finalize_response(request, response, *args, **kwargs)
+        response["Cache-Control"] = "no-store, private"
+        response["Pragma"] = "no-cache"
+        response["Referrer-Policy"] = "no-referrer"
+        return response
+
+
+class ClinicalPhotoSetViewSet(PrivatePhotoResponseMixin, viewsets.ModelViewSet):
     serializer_class = ClinicalPhotoSetSerializer
     permission_classes = [ClinicalPhotoPermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ("patient", "surgery", "consultation", "anatomical_area")
-    search_fields = ("title", "notes", "patient__patient_reference")
-    ordering_fields = ("captured_at", "created_at")
+    filterset_fields = {"patient": ["exact"], "surgery": ["exact"], "consultation": ["exact"],
+                        "anatomical_area": ["exact"], "captured_at": ["date", "gte", "lte"]}
+    search_fields = ("title", "notes", "anatomical_area", "patient__patient_reference", "patient__first_name", "patient__last_name")
+    ordering_fields = ("captured_at", "created_at", "patient__last_name", "patient__first_name", "title")
     ordering = ("-captured_at", "-created_at")
 
     def get_queryset(self):
-        queryset = ClinicalPhotoSet.objects.select_related("patient", "surgery", "consultation", "created_by")
+        cover = ClinicalPhoto.objects.filter(photo_set_id=OuterRef("pk"), is_archived=False).order_by("-captured_at", "-created_at").values("pk")[:1]
+        queryset = ClinicalPhotoSet.objects.select_related("patient", "surgery", "consultation", "created_by").annotate(
+            photo_count=Count("photos", filter=Q(photos__is_archived=False), distinct=True),
+            cover_photo=Subquery(cover),
+        )
         if getattr(self.request.user, "role", None) == User.Role.NURSE:
             queryset = filter_nurse_care_relevant_patients(queryset, self.request.user)
         return queryset
 
+    def destroy(self, request, *args, **kwargs):
+        try:
+            delete_photo_set(instance=self.get_object(), actor=request.user, request=request)
+        except DjangoValidationError as error:
+            return Response(drf_validation(error), status=status.HTTP_400_BAD_REQUEST)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
-class ClinicalPhotoViewSet(viewsets.ModelViewSet):
+
+class ClinicalPhotoViewSet(PrivatePhotoResponseMixin, viewsets.ModelViewSet):
     serializer_class = ClinicalPhotoSerializer
     permission_classes = [ClinicalPhotoPermission]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
@@ -226,8 +251,8 @@ class ClinicalPhotoViewSet(viewsets.ModelViewSet):
         "is_archived": ["exact"],
         "photo_set": ["exact"],
     }
-    search_fields = ("description", "notes", "original_filename", "patient__patient_reference")
-    ordering_fields = ("captured_at", "created_at")
+    search_fields = ("description", "notes", "original_filename", "anatomical_area", "photo_set__title", "patient__patient_reference", "patient__first_name", "patient__last_name")
+    ordering_fields = ("captured_at", "created_at", "patient__last_name", "patient__first_name", "photo_set__title")
     ordering = ("-captured_at", "-created_at")
 
     def get_queryset(self):
@@ -239,7 +264,7 @@ class ClinicalPhotoViewSet(viewsets.ModelViewSet):
             "uploaded_by",
             "archived_by",
         )
-        if "is_archived" not in self.request.query_params and self.action not in {"retrieve", "archive", "download", "view"}:
+        if "is_archived" not in self.request.query_params and self.action not in {"retrieve", "archive", "download", "view", "thumbnail"}:
             queryset = queryset.filter(is_archived=False)
         if getattr(self.request.user, "role", None) == User.Role.NURSE:
             queryset = filter_nurse_care_relevant_patients(queryset, self.request.user)
@@ -261,33 +286,43 @@ class ClinicalPhotoViewSet(viewsets.ModelViewSet):
             return Response(drf_validation(error), status=status.HTTP_400_BAD_REQUEST)
         return Response(self.get_serializer(photo).data)
 
+    @action(detail=False, methods=["get"], url_path="upload-rules")
+    def upload_rules(self, request):
+        return Response({"max_size": clinical_photo_max_size(), "mime_types": ["image/jpeg", "image/png"]})
+
+    def _image_response(self, request, *, thumbnail=False, inline=True):
+        photo = self.get_object()
+        try:
+            with photo.image.open("rb") as image:
+                pixels, mime_type = sanitized_image_bytes(image, thumbnail=thumbnail)
+        except FileNotFoundError as error:
+            raise Http404("Clinical image unavailable.") from error
+        except DjangoValidationError as error:
+            return Response(drf_validation(error), status=status.HTTP_400_BAD_REQUEST)
+        audit_file_access(actor=request.user, obj=photo,
+                          action="CLINICAL_PHOTO_THUMBNAIL_VIEWED" if thumbnail else ("CLINICAL_PHOTO_VIEWED" if inline else "CLINICAL_PHOTO_DOWNLOADED"), request=request)
+        response = FileResponse(BytesIO(pixels), content_type=mime_type)
+        response["Content-Disposition"] = content_disposition_header(as_attachment=not inline, filename=sanitize_filename(photo.original_filename))
+        response["X-Content-Type-Options"] = "nosniff"
+        return response
+
+    @action(detail=True, methods=["get"])
+    def thumbnail(self, request, pk=None):
+        return self._image_response(request, thumbnail=True)
+
     @action(detail=True, methods=["get"])
     def download(self, request, pk=None):
-        photo = self.get_object()
-        audit_file_access(actor=request.user, obj=photo, action="CLINICAL_PHOTO_DOWNLOADED", request=request)
-        return secure_file_response(
-            field_file=photo.image,
-            filename=photo.original_filename,
-            mime_type=photo.mime_type,
-            inline=False,
-        )
+        return self._image_response(request, inline=False)
 
     @action(detail=True, methods=["get"])
     def view(self, request, pk=None):
-        photo = self.get_object()
-        audit_file_access(actor=request.user, obj=photo, action="CLINICAL_PHOTO_VIEWED", request=request)
-        return secure_file_response(
-            field_file=photo.image,
-            filename=photo.original_filename,
-            mime_type=photo.mime_type,
-            inline=True,
-        )
+        return self._image_response(request)
 
     def destroy(self, request, *args, **kwargs):
         return Response({"detail": "Clinical photos are archived, not deleted."}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
-class ClinicalPhotoComparisonViewSet(viewsets.ModelViewSet):
+class ClinicalPhotoComparisonViewSet(PrivatePhotoResponseMixin, viewsets.ModelViewSet):
     serializer_class = ClinicalPhotoComparisonSerializer
     permission_classes = [ClinicalPhotoPermission]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]

@@ -8,10 +8,12 @@ export function PrivateClinicalImage({
   photoId,
   alt,
   className,
+  thumbnail = false,
 }: {
   photoId: number | string;
   alt: string;
   className?: string;
+  thumbnail?: boolean;
 }) {
   const [src, setSrc] = useState("");
   const [error, setError] = useState("");
@@ -24,9 +26,10 @@ export function PrivateClinicalImage({
       setError("");
       setSrc("");
       try {
-        const response = await fetchClinicalPhotoBlob(photoId, "view");
+        const response = await fetchClinicalPhotoBlob(photoId, thumbnail ? "thumbnail" : "view");
+        if (!active) return;
         objectUrl = URL.createObjectURL(response.blob);
-        if (active) setSrc(objectUrl);
+        setSrc(objectUrl);
       } catch (cause) {
         if (active) setError(documentErrorMessage(cause));
       }
@@ -37,7 +40,7 @@ export function PrivateClinicalImage({
       active = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [photoId]);
+  }, [photoId, thumbnail]);
 
   if (error) return <div className={className} role="alert">{error}</div>;
   if (!src) return <div className={className} role="status">Chargement sécurisé…</div>;

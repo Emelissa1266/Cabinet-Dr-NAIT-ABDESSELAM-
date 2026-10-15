@@ -16,7 +16,7 @@ import {
   decimalAmount,
   sessionStatusLabels,
 } from "../services/care-display";
-import { listCares, listCareSessions, listCareTypes } from "../services/care-api-service";
+import { listAllCares, listAllCareSessions, listCareTypes } from "../services/care-api-service";
 
 export function PatientCareSection({ patient }: { patient: Patient }) {
   const [cares, setCares] = useState<CareApi[]>([]);
@@ -29,12 +29,12 @@ export function PatientCareSection({ patient }: { patient: Patient }) {
     let active = true;
     async function load() {
       const [carePage, typePage] = await Promise.all([
-        listCares({ patient: patient.apiId, ordering: "-start_date" }),
+        listAllCares({ patient: patient.apiId, ordering: "-start_date" }),
         listCareTypes({ ordering: "name" }),
       ]);
       const sessionEntries = await Promise.all(
         carePage.results.map(async (care) => {
-          const response = await listCareSessions({ care: care.id, ordering: "scheduled_at" });
+          const response = await listAllCareSessions({ care: care.id, ordering: "scheduled_at" });
           return [care.id, response.results] as const;
         }),
       );

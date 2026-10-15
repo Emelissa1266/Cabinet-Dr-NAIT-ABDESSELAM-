@@ -11,7 +11,7 @@ from .models import (
     DocumentCategory,
 )
 from .permissions import is_care_relevant, is_patient_care_relevant
-from .services import create_photo_comparison, upload_clinical_photo, upload_document
+from .services import create_photo_comparison, save_photo_set, update_clinical_photo, upload_clinical_photo, upload_document
 
 
 def raise_drf_validation(error):
@@ -123,6 +123,14 @@ class DocumentSerializer(serializers.ModelSerializer):
 
 
 class ClinicalPhotoSetSerializer(serializers.ModelSerializer):
+    patient_name = serializers.SerializerMethodField()
+    patient_reference = serializers.CharField(source="patient.patient_reference", read_only=True)
+    photo_count = serializers.IntegerField(read_only=True)
+    cover_photo = serializers.IntegerField(read_only=True, allow_null=True)
+
+    def get_patient_name(self, obj):
+        return f"{obj.patient.first_name} {obj.patient.last_name}".strip()
+
     class Meta:
         model = ClinicalPhotoSet
         fields = "__all__"
@@ -138,12 +146,25 @@ class ClinicalPhotoSetSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         try:
-            return ClinicalPhotoSet.objects.create(created_by=self.context["request"].user, **validated_data)
+            return save_photo_set(actor=self.context["request"].user, request=self.context["request"], **validated_data)
+        except DjangoValidationError as error:
+            raise_drf_validation(error)
+
+    def update(self, instance, validated_data):
+        try:
+            return save_photo_set(instance=instance, actor=self.context["request"].user,
+                                  request=self.context["request"], **validated_data)
         except DjangoValidationError as error:
             raise_drf_validation(error)
 
 
 class ClinicalPhotoSerializer(serializers.ModelSerializer):
+    patient_name = serializers.SerializerMethodField()
+    photo_set_title = serializers.CharField(source="photo_set.title", read_only=True, default="")
+
+    def get_patient_name(self, obj):
+        return f"{obj.patient.first_name} {obj.patient.last_name}".strip()
+
     image = serializers.ImageField(write_only=True, required=True)
     patient_reference = serializers.CharField(source="patient.patient_reference", read_only=True)
     uploaded_by_name = serializers.CharField(source="uploaded_by.get_full_name", read_only=True)
@@ -154,6 +175,8 @@ class ClinicalPhotoSerializer(serializers.ModelSerializer):
             "id",
             "patient",
             "patient_reference",
+            "patient_name",
+            "photo_set_title",
             "surgery",
             "consultation",
             "photo_set",
@@ -218,15 +241,11 @@ class ClinicalPhotoSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         validated_data.pop("image", None)
-        if instance.is_archived:
-            raise serializers.ValidationError("Archived photos cannot be modified.")
-        for field, value in validated_data.items():
-            setattr(instance, field, value)
         try:
-            instance.save()
+            return update_clinical_photo(instance=instance, actor=self.context["request"].user,
+                                         request=self.context["request"], **validated_data)
         except DjangoValidationError as error:
             raise_drf_validation(error)
-        return instance
 
 
 class ClinicalPhotoComparisonSerializer(serializers.ModelSerializer):

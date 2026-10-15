@@ -20,6 +20,7 @@ export const navigation: readonly NavigationItem[] = [
   { label: "Interventions", href: "/interventions", icon: "interventions", roles: medical, available: true },
   { label: "Soins", href: "/care", icon: "care", roles: ["ADMIN", "DOCTOR", "NURSE"], available: true },
   { label: "Ordonnances", href: "/prescriptions", icon: "prescriptions", roles: medical, available: true },
+  { label: "Arrêts de travail", href: "/work-leaves", icon: "prescriptions", roles: ["DOCTOR"], available: true },
   { label: "Photothèque", href: "/phototheque", icon: "phototheque", roles: ["ADMIN", "DOCTOR", "NURSE"], available: true },
   { label: "Facturation", href: "/billing", icon: "billing", roles: ["ADMIN", "DOCTOR", "SECRETARY"], available: true },
 ];

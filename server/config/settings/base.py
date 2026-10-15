@@ -169,6 +169,7 @@ CSRF_TRUSTED_ORIGINS = env_list(
     "http://localhost:3000,http://127.0.0.1:3000",
 )
 CORS_ALLOW_CREDENTIALS = True
+CORS_EXPOSE_HEADERS = ["Content-Disposition"]
 CSRF_COOKIE_NAME = os.getenv("CSRF_COOKIE_NAME", "clinic_csrftoken")
 CSRF_COOKIE_SAMESITE = os.getenv("CSRF_COOKIE_SAMESITE", "Lax")
 CSRF_COOKIE_HTTPONLY = False
@@ -210,8 +211,8 @@ SIMPLE_JWT = {
 }
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "Clinic Management API",
-    "DESCRIPTION": "Backend API for the Clinic Management project.",
+    "TITLE": "Cabinet médical API",
+    "DESCRIPTION": "API du cabinet médical spécialisé en chirurgie plastique et esthétique.",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": "/api/v1",
@@ -220,3 +221,11 @@ SPECTACULAR_SETTINGS = {
 
 DATA_UPLOAD_MAX_MEMORY_SIZE = env_int("DATA_UPLOAD_MAX_MEMORY_SIZE", 5 * 1024 * 1024)
 FILE_UPLOAD_MAX_MEMORY_SIZE = env_int("FILE_UPLOAD_MAX_MEMORY_SIZE", 5 * 1024 * 1024)
+
+# Employer-facing template: only these non-diagnostic placeholders are accepted.
+# Medical/regulatory review remains required before production use.
+WORK_LEAVE_CERTIFICATE_TEXT = os.getenv(
+    "WORK_LEAVE_CERTIFICATE_TEXT",
+    "Je soussigné, {doctor}, prescris un arrêt de travail pour {patient}, "
+    "d'une durée de {duration} jours calendaires, du {start} au {end} inclus.",
+)

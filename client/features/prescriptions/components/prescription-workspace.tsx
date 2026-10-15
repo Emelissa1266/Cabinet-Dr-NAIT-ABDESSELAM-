@@ -13,6 +13,7 @@ import { MedicalAlertsSummary } from "@/features/patients/components/medical-ale
 import type { Patient } from "@/features/patients/types";
 import type { Prescription, PrescriptionPayload, PrescriptionStatus } from "../types";
 import { prescriptionService } from "../services/prescription-service";
+import { PrescriptionActions } from "./prescription-actions";
 import { PrescriptionEditor } from "./prescription-editor";
 import ui from "@/components/ui/clinical.module.css";
 import styles from "@/components/ui/module-workspace.module.css";
@@ -140,11 +141,11 @@ export function PrescriptionWorkspace() {
             {filtered.map((prescription) => (
               <tr key={prescription.id}>
                 <td>{formatDateTime(prescription.prescribed_at)}</td>
-                <td><strong>{patientName(prescription.patient)}</strong></td>
+                <td><strong>{prescription.patient_name || patientName(prescription.patient)}</strong></td>
                 <td>{prescription.items.length} médicament(s)<span className={styles.small}>{prescription.items[0]?.medication_name ?? prescription.general_instructions}</span></td>
                 <td>{prescription.consultation ? consultationById.get(prescription.consultation)?.reason ?? "Consultation liée" : "Non liée"}</td>
                 <td><StatusBadge tone={statusTones[prescription.status]}>{statusLabels[prescription.status]}</StatusBadge></td>
-                <td><button className={styles.link} onClick={() => setSelected(prescription)} aria-label={`Voir l’ordonnance ${prescription.id}`}>Consulter</button></td>
+                <td><PrescriptionActions id={prescription.id} onView={() => setSelected(prescription)} /></td>
               </tr>
             ))}
           </tbody>
@@ -157,8 +158,8 @@ export function PrescriptionWorkspace() {
       <DetailDialog title="Détail de l’ordonnance" open={Boolean(selected)} onClose={() => setSelected(null)}>
         {selected && (
           <>
-            <h3>{patientName(selected.patient)}</h3>
-            <p>{formatDateTime(selected.prescribed_at)} · {user?.displayName || user?.username || "Praticien"}</p>
+            <h3>{selected.patient_name || patientName(selected.patient)}</h3>
+            <p>{formatDateTime(selected.prescribed_at)} · {selected.doctor_name || "Praticien"}</p>
             <StatusBadge tone={statusTones[selected.status]}>{statusLabels[selected.status]}</StatusBadge>
             <MedicalAlertsSummary patientId={selected.patient} />
             <section className={styles.section}>
@@ -183,9 +184,8 @@ export function PrescriptionWorkspace() {
               {patientPath(selected.patient)
                 ? <Link className={ui.action} href={`/patients/${patientPath(selected.patient)}`}>Dossier patient</Link>
                 : <button className={ui.action} disabled>Dossier patient</button>}
-              <button className={ui.action} onClick={() => setEditing(selected)}>Modifier</button>
-              <button className={ui.action} disabled title="Impression indisponible pour le moment">Imprimer</button>
-              <button className={ui.action} disabled title="Export PDF indisponible pour le moment">Exporter PDF</button>
+              {user?.role === "DOCTOR" && <button className={ui.action} onClick={() => setEditing(selected)}>Modifier</button>}
+              <PrescriptionActions id={selected.id} />
             </div>
           </>
         )}

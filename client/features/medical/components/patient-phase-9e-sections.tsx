@@ -1,6 +1,7 @@
 "use client";
 
-import Link from "next/link";
+import { CreateWorkLeaveButton } from "@/features/work-leaves/components/create-work-leave-button";
+import { PrescriptionActions } from "@/features/prescriptions/components/prescription-actions";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DetailDialog } from "@/components/ui/detail-dialog";
 import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
@@ -282,7 +283,7 @@ export function PatientPhase9ESections({ patient, mode }: { patient: Patient; mo
       <section className={ui.panel}>
         <div className={ui.actions}><h2>Ordonnances</h2>{canWrite && <button className={`${ui.action} ${ui.primary}`} onClick={() => setPrescriptionEditor(true)}>Nouvelle ordonnance</button>}</div>
         {feedback && <p role="status">{feedback}</p>}
-        {prescriptions.length ? <ol className={styles.timeline}>{prescriptions.map((item) => <li key={item.id}><strong>{formatDateTime(item.prescribed_at)} · {item.items.length} médicament(s)</strong><StatusBadge tone={toneByPrescription[item.status]}>{prescriptionLabels[item.status]}</StatusBadge><p>{item.items[0]?.medication_name ?? item.general_instructions}</p><Link href="/prescriptions" className={ui.action}>Ouvrir les ordonnances</Link></li>)}</ol> : <p>Aucune ordonnance enregistrée pour ce patient.</p>}
+        {prescriptions.length ? <ol className={styles.timeline}>{prescriptions.map((item) => <li key={item.id}><strong>{formatDateTime(item.prescribed_at)} · {item.items.length} médicament(s)</strong><StatusBadge tone={toneByPrescription[item.status]}>{prescriptionLabels[item.status]}</StatusBadge><p>{item.items[0]?.medication_name ?? item.general_instructions}</p><PrescriptionActions id={item.id} /></li>)}</ol> : <p>Aucune ordonnance enregistrée pour ce patient.</p>}
         <DetailDialog title="Nouvelle ordonnance" open={prescriptionEditor} onClose={() => setPrescriptionEditor(false)}>
           {prescriptionEditor && <PrescriptionEditor patients={patientOption} consultations={consultations} defaultPatientId={patient.apiId} lockedPatient onSave={savePrescription} />}
         </DetailDialog>
@@ -295,7 +296,7 @@ export function PatientPhase9ESections({ patient, mode }: { patient: Patient; mo
       <section className={ui.panel}>
         <div className={ui.actions}><h2>Consultations</h2>{canWrite && <button className={`${ui.action} ${ui.primary}`} onClick={() => { setFeedback(""); setConsultationEditor("new"); }}>Nouvelle consultation</button>}</div>
         {feedback && <p role="status">{feedback}</p>}
-        {consultations.length ? <ol className={styles.timeline}>{consultations.map((item) => <li key={item.id}><strong>{formatDateTime(item.consultation_date)} · {item.reason}</strong><StatusBadge tone={toneByConsultation[item.status]}>{consultationStatuses.find((status) => status.value === item.status)?.label ?? item.status}</StatusBadge><p>{item.diagnosis || item.clinical_findings || "Aucun diagnostic renseigné."}</p>{canWrite && <button className={ui.action} onClick={() => setConsultationEditor(item)}>Modifier</button>}</li>)}</ol> : <p>Aucune consultation enregistrée pour ce patient.</p>}
+        {consultations.length ? <ol className={styles.timeline}>{consultations.map((item) => <li key={item.id}><strong>{formatDateTime(item.consultation_date)} · {item.reason}</strong><StatusBadge tone={toneByConsultation[item.status]}>{consultationStatuses.find((status) => status.value === item.status)?.label ?? item.status}</StatusBadge><p>{item.diagnosis || item.clinical_findings || "Aucun diagnostic renseigné."}</p>{canWrite && <button className={ui.action} onClick={() => setConsultationEditor(item)}>Modifier</button>}{canWrite && <CreateWorkLeaveButton patient={patient} consultation={item.id} />}</li>)}</ol> : <p>Aucune consultation enregistrée pour ce patient.</p>}
       </section>
       <section className={ui.panel}>
         <div className={ui.actions}><h2>Instructions médicales</h2>{canWrite && <button className={`${ui.action} ${ui.primary}`} onClick={() => { setFeedback(""); setInstructionEditor("new"); }}>Nouvelle instruction</button>}</div>

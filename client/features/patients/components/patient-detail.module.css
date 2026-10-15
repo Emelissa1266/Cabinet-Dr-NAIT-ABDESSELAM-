@@ -37,3 +37,5 @@
 .timeline time { display: block; color: var(--muted); font-size: 11px; }
 @media(max-width: 900px) { .columns { grid-template-columns: 1fr; } .identity > div:last-child { margin-left: 0; } }
 @media(max-width: 500px) { .header { padding: 18px; } .twoColumns { grid-template-columns: 1fr; } .appointment { flex-direction: column; } .appointmentActions { align-items: flex-start; } }
+
+.photoColumns{grid-template-columns:minmax(0,1fr)}

@@ -27,7 +27,7 @@ class CookieAuthenticateHeaderMixin:
 
 
 @extend_schema(
-    description="Authenticate an active clinic user and set HttpOnly JWT cookies.",
+    description="Authentifier un utilisateur actif du cabinet et définir les cookies JWT HttpOnly.",
     request=LoginSerializer,
     responses={200: UserSerializer},
 )

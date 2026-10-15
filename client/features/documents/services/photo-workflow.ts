@@ -89,8 +89,8 @@ export function clinicalPhotoErrorMessage(cause: unknown, fallback: string) {
   if (cause instanceof PhotoWorkflowError) return cause.message;
   if (cause instanceof ApiError) {
     if (cause.status === 0) return "Connexion au serveur impossible.";
-    if (cause.status === 403) return "Accès refusé pour cette photothèque clinique.";
-    if (cause.status === 404) return "Photothèque clinique introuvable ou non accessible.";
+    if (cause.status === 403) return "Accès refusé pour cette photothèque médicale.";
+    if (cause.status === 404) return "Photothèque médicale introuvable ou non accessible.";
     return apiValidationMessage(cause.data) || fallback;
   }
   return fallback;

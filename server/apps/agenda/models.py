@@ -245,7 +245,7 @@ class ClinicClosure(models.Model):
 
     def clean(self):
         if self.start_at >= self.end_at:
-            raise ValidationError("Clinic closure start_at must be before end_at.")
+            raise ValidationError("Le début de la fermeture du cabinet doit précéder sa fin.")
 
 
 class AppointmentReschedule(models.Model):

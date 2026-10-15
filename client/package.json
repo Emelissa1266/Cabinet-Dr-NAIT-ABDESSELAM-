@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test features/clinic/services/workflows.test.mjs features/nurse/services/session-state.test.mjs features/nurse/services/nurse-care-state.test.mjs features/billing/services/billing-display.test.mjs features/agenda/services/agenda-form.test.mjs features/patients/services/patient-appointments.test.mjs features/admin/services/admin-working-hours.test.mjs features/dashboard/services/dashboard-view.test.mjs features/documents/services/photo-workflow.test.mjs lib/presentation.test.mjs"
+    "test": "node --test features/clinic/services/workflows.test.mjs features/nurse/services/session-state.test.mjs features/nurse/services/nurse-care-state.test.mjs features/billing/services/billing-display.test.mjs features/agenda/services/agenda-form.test.mjs features/patients/services/patient-appointments.test.mjs features/admin/services/admin-working-hours.test.mjs features/dashboard/services/dashboard-view.test.mjs features/documents/services/photo-workflow.test.mjs lib/presentation.test.mjs features/prescriptions/services/prescription-pdf.test.mjs features/work-leaves/services/work-leave.test.mjs"
   },
   "dependencies": {
     "next": "^16.3.8",

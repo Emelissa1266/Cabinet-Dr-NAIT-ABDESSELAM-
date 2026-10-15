@@ -9,3 +9,5 @@
 .body dd { overflow-wrap: anywhere; }
 .body p { margin-block: 12px; }
 :global(body):has(.dialog[open]) { overflow: hidden; }
+
+.wide { width: min(760px, 100vw); }

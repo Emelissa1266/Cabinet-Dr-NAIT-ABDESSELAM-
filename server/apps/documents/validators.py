@@ -5,7 +5,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 ALLOWED_DOCUMENT_MIME_TYPES = {"application/pdf", "image/jpeg", "image/png"}
 ALLOWED_IMAGE_MIME_TYPES = {"image/jpeg", "image/png"}
@@ -81,9 +81,11 @@ def validate_image_file(file_obj, *, max_size: int) -> tuple[str, str, int, int,
     file_obj.seek(0)
     try:
         image = Image.open(BytesIO(file_obj.read()))
-        image.verify()
         width, height = image.size
-    except (UnidentifiedImageError, OSError) as error:
+        if width * height > getattr(settings, "CLINICAL_PHOTO_MAX_PIXELS", 36_000_000):
+            raise ValidationError("Image dimensions exceed the configured limit.")
+        image.verify()
+    except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as error:
         raise ValidationError("Uploaded image is corrupted or invalid.") from error
     finally:
         file_obj.seek(position)
@@ -96,3 +98,27 @@ def document_max_size() -> int:
 
 def clinical_photo_max_size() -> int:
     return settings.CLINICAL_PHOTO_MAX_UPLOAD_SIZE
+
+
+def sanitized_image_bytes(file_obj, *, thumbnail=False):
+    """Keep originals private; serve/re-encode pixels without EXIF, GPS or text metadata."""
+    file_obj.seek(0)
+    try:
+        with Image.open(file_obj) as source:
+            if source.width * source.height > getattr(settings, "CLINICAL_PHOTO_MAX_PIXELS", 36_000_000):
+                raise ValidationError("Image dimensions exceed the configured limit.")
+            image_format = source.format
+            image = ImageOps.exif_transpose(source)
+            if thumbnail:
+                image.thumbnail((480, 480))
+            mode = "RGBA" if image_format == "PNG" and "A" in image.getbands() else "RGB"
+            # A fresh image also drops PNG text chunks and encoder metadata.
+            pixels = Image.new(mode, image.size)
+            pixels.paste(image.convert(mode))
+            output = BytesIO()
+            pixels.save(output, format="PNG" if image_format == "PNG" else "JPEG", **({} if image_format == "PNG" else {"quality": 90}))
+            return output.getvalue(), "image/png" if image_format == "PNG" else "image/jpeg"
+    except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as error:
+        raise ValidationError("Uploaded image is corrupted or invalid.") from error
+    finally:
+        file_obj.seek(0)

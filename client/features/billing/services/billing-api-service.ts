@@ -117,3 +117,11 @@ export function getReceipt(id: number | string) {
 export function getPatientFinancialSummary(patientId: number | string) {
   return apiRequest<PatientFinancialSummaryApi>(`patients/${patientId}/financial-summary/`);
 }
+
+export function deleteInvoice(id: number) {
+  return apiRequest<void>(`invoices/${id}/`, { method: "DELETE" });
+}
+
+export function getInvoiceSummary(params: InvoiceListParams = {}) {
+  return apiRequest<{ total: string; paid: string; remaining: string }>(`invoices/summary/${queryString(params)}`);
+}

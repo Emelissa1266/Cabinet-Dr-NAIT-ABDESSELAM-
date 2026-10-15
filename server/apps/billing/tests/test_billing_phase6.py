@@ -142,7 +142,7 @@ def test_invoice_lifecycle_and_immutability(api_client, secretary_user, patient,
     assert issued.data["status"] == Invoice.Status.ISSUED
     assert issued.data["invoice_number"].startswith(f"INV-{timezone.localdate().year}-")
     assert rewrite.status_code == status.HTTP_400_BAD_REQUEST
-    assert delete.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
+    assert delete.status_code == status.HTTP_400_BAD_REQUEST
     assert repeat_issue.status_code == status.HTTP_400_BAD_REQUEST
     item.refresh_from_db()
     assert item.unit_price == Decimal("50000.00")

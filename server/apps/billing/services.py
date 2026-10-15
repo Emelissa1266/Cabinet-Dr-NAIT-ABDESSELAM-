@@ -62,7 +62,9 @@ def create_invoice(*, actor, request=None, **validated_data) -> Invoice:
 
 def ensure_invoice_draft(invoice: Invoice):
     if invoice.status != Invoice.Status.DRAFT:
-        raise ValidationError("Only draft invoices can be edited.")
+        raise ValidationError("Seules les factures brouillon peuvent être modifiées ou supprimées.")
+    if invoice.allocations.exists():
+        raise ValidationError("Cette facture est liée à des opérations financières.")
 
 
 def default_item_values_from_source(data: dict) -> dict:
@@ -97,6 +99,7 @@ def create_invoice_item(*, actor, request=None, **validated_data) -> InvoiceItem
     with transaction.atomic():
         invoice = Invoice.objects.select_for_update().get(pk=validated_data["invoice"].pk)
         ensure_invoice_draft(invoice)
+        ensure_invoice_owner(invoice, actor)
         validated_data["invoice"] = invoice
         item = InvoiceItem(**default_item_values_from_source(validated_data))
         item.save()
@@ -113,8 +116,12 @@ def create_invoice_item(*, actor, request=None, **validated_data) -> InvoiceItem
 
 def update_invoice_item(*, item: InvoiceItem, actor, request=None, **validated_data) -> InvoiceItem:
     with transaction.atomic():
+        invoice = Invoice.objects.select_for_update().get(pk=item.invoice_id)
+        ensure_invoice_owner(invoice, actor)
         item = InvoiceItem.objects.select_for_update().select_related("invoice").get(pk=item.pk)
-        ensure_invoice_draft(item.invoice)
+        ensure_invoice_draft(invoice)
+        if "invoice" in validated_data and validated_data["invoice"].pk != invoice.pk:
+            raise ValidationError("A billing line cannot be moved to another invoice.")
         old_data = {"net_amount": str(item.net_amount), "description": item.description}
         for field, value in validated_data.items():
             setattr(item, field, value)
@@ -133,8 +140,10 @@ def update_invoice_item(*, item: InvoiceItem, actor, request=None, **validated_d
 
 def delete_invoice_item(*, item: InvoiceItem, actor, request=None):
     with transaction.atomic():
+        invoice = Invoice.objects.select_for_update().get(pk=item.invoice_id)
+        ensure_invoice_owner(invoice, actor)
         item = InvoiceItem.objects.select_for_update().select_related("invoice").get(pk=item.pk)
-        ensure_invoice_draft(item.invoice)
+        ensure_invoice_draft(invoice)
         old_data = {"invoice": item.invoice_id, "net_amount": str(item.net_amount)}
         item.delete()
         record_audit_event(
@@ -150,8 +159,8 @@ def delete_invoice_item(*, item: InvoiceItem, actor, request=None):
 def issue_invoice(*, invoice: Invoice, actor, request=None) -> Invoice:
     with transaction.atomic():
         invoice = Invoice.objects.select_for_update().prefetch_related("items").get(pk=invoice.pk)
-        if invoice.status != Invoice.Status.DRAFT:
-            raise ValidationError("Only draft invoices can be issued.")
+        ensure_invoice_owner(invoice, actor)
+        ensure_invoice_draft(invoice)
         if not invoice.items.exists():
             raise ValidationError("Invoice must contain at least one item before issue.")
         invoice.full_clean()
@@ -175,6 +184,9 @@ def issue_invoice(*, invoice: Invoice, actor, request=None) -> Invoice:
 def cancel_invoice(*, invoice: Invoice, actor, reason: str, request=None) -> Invoice:
     with transaction.atomic():
         invoice = Invoice.objects.select_for_update().get(pk=invoice.pk)
+        ensure_invoice_owner(invoice, actor)
+        if invoice.allocations.exclude(payment__status="CANCELLED").exists():
+            raise ValidationError("Cancel associated financial operations before cancelling the invoice.")
         if invoice.status == Invoice.Status.CANCELLED:
             raise ValidationError("Invoice is already cancelled.")
         if invoice.paid_amount > MONEY_ZERO:
@@ -225,3 +237,72 @@ def upsert_billable_service_audit(*, service: BillableService, actor, request=No
         new_data={"code": service.code, "default_unit_price": str(service.default_unit_price)},
         request=request,
     )
+
+
+def ensure_invoice_owner(invoice, actor):
+    from apps.accounts.models import User
+    if actor.role == User.Role.NURSE and invoice.created_by_id != actor.pk:
+        raise ValidationError("Only invoices created by this nurse can be modified.")
+
+
+@transaction.atomic
+def save_invoice_form(*, actor, invoice=None, lines=None, emit=False, request=None, **data):
+    if invoice is None:
+        invoice = create_invoice(actor=actor, request=request, **data)
+        old_data = None
+    else:
+        invoice = Invoice.objects.select_for_update().get(pk=invoice.pk)
+        ensure_invoice_owner(invoice, actor)
+        ensure_invoice_draft(invoice)
+        old_discount = invoice.discount_amount
+        old_data = {"patient": invoice.patient_id, "notes": invoice.notes,
+                    "due_date": str(invoice.due_date), "total": str(invoice.total)}
+        for field, value in data.items():
+            setattr(invoice, field, value)
+        invoice.save()
+    if lines is not None:
+        existing = {item.pk: item for item in invoice.items.all()}
+        retained = set()
+        for line in lines:
+            line = dict(line)
+            item_id = line.pop("id", None)
+            if item_id is not None:
+                if item_id not in existing or item_id in retained:
+                    raise ValidationError("Ligne de facture invalide ou dupliquée.")
+                retained.add(item_id)
+                update_invoice_item(item=existing[item_id], actor=actor, request=request, **line)
+            else:
+                create_invoice_item(invoice=invoice, actor=actor, request=request, **line)
+        for item_id, item in existing.items():
+            if item_id not in retained:
+                delete_invoice_item(item=item, actor=actor, request=request)
+    # Validate retained clinical links against the updated patient too.
+    for item in invoice.items.all():
+        item.full_clean()
+    invoice.full_clean()
+    if old_data is not None:
+        if "discount_amount" in data and old_discount != invoice.discount_amount:
+            record_audit_event(user=actor, action="INVOICE_DISCOUNT_CHANGED", entity_type="Invoice",
+                              entity_id=invoice.pk, old_data={"discount_amount": str(old_discount)},
+                              new_data={"discount_amount": str(invoice.discount_amount)}, request=request)
+        record_audit_event(user=actor, action="INVOICE_CHANGED", entity_type="Invoice",
+                          entity_id=invoice.pk, old_data=old_data,
+                          new_data={"patient": invoice.patient_id, "notes": invoice.notes,
+                                    "due_date": str(invoice.due_date), "total": str(invoice.total)}, request=request)
+    return issue_invoice(invoice=invoice, actor=actor, request=request) if emit else invoice
+
+
+@transaction.atomic
+def delete_invoice(*, invoice, actor, request=None):
+    invoice = Invoice.objects.select_for_update().get(pk=invoice.pk)
+    ensure_invoice_owner(invoice, actor)
+    ensure_invoice_draft(invoice)
+    old_data = {"patient": invoice.patient_id, "status": invoice.status,
+                "total": str(invoice.total), "items": [{"id": item.pk, "description": item.description,
+                           "quantity": str(item.quantity), "unit_price": str(item.unit_price),
+                           "discount_amount": str(item.discount_amount)} for item in invoice.items.all()]}
+    invoice_id = invoice.pk
+    # PaymentAllocation.invoice is PROTECT; no payment or receipt is deleted.
+    invoice.delete()
+    record_audit_event(user=actor, action="INVOICE_DELETED", entity_type="Invoice",
+                      entity_id=invoice_id, old_data=old_data, request=request)

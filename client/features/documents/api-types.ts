@@ -49,6 +49,10 @@ export interface DocumentApi {
 }
 
 export interface ClinicalPhotoSetApi {
+  patient_name?: string;
+  patient_reference?: string;
+  photo_count?: number;
+  cover_photo?: number | null;
   id: number;
   patient: number;
   surgery: number | null;
@@ -63,6 +67,8 @@ export interface ClinicalPhotoSetApi {
 }
 
 export interface ClinicalPhotoApi {
+  patient_name?: string;
+  photo_set_title?: string;
   id: number;
   patient: number;
   patient_reference: string;
@@ -137,6 +143,7 @@ export interface ClinicalPhotoSetListParams {
   surgery?: number | string;
   consultation?: number | string;
   anatomical_area?: string;
+  captured_at__date?: string;
   search?: string;
   ordering?: string;
 }

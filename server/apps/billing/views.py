@@ -1,5 +1,6 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db.models import Sum
+from django.db.models import DecimalField, F, OuterRef, Subquery, Sum, Value
+from django.db.models.functions import Coalesce, Greatest
 from django.http import HttpResponse
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -25,6 +26,7 @@ from .serializers import (
 )
 from .services import (
     cancel_invoice,
+    delete_invoice,
     delete_invoice_item,
     issue_invoice,
     upsert_billable_service_audit,
@@ -110,6 +112,24 @@ class InvoiceViewSet(viewsets.ModelViewSet):
                 ).exclude(status__in=[Invoice.Status.CANCELLED, Invoice.Status.PAID])
         return queryset
 
+    @action(detail=False, methods=["get"])
+    def summary(self, request):
+        queryset = self.filter_queryset(self.get_queryset()).exclude(
+            status__in=[Invoice.Status.DRAFT, Invoice.Status.CANCELLED])
+        money = DecimalField(max_digits=18, decimal_places=2)
+        zero = Value(MONEY_ZERO, output_field=money)
+        lines = InvoiceItem.objects.filter(invoice_id=OuterRef("pk")).order_by().values("invoice_id").annotate(
+            amount=Sum("net_amount")).values("amount")
+        allocations = PaymentAllocation.objects.filter(invoice_id=OuterRef("pk"), payment__status=Payment.Status.COMPLETED).order_by().values("invoice_id").annotate(
+            amount=Sum("amount")).values("amount")
+        queryset = queryset.annotate(
+            _subtotal=Coalesce(Subquery(lines, output_field=money), zero),
+            _paid=Coalesce(Subquery(allocations, output_field=money), zero),
+        ).annotate(_total=Greatest(F("_subtotal") - F("discount_amount"), zero))
+        totals = queryset.aggregate(total=Sum("_total"), paid=Sum("_paid"),
+                                    remaining=Sum(Greatest(F("_total") - F("_paid"), zero)))
+        return Response({key: format(value or MONEY_ZERO, ".2f") for key, value in totals.items()})
+
     @action(detail=True, methods=["post"])
     def issue(self, request, pk=None):
         try:
@@ -139,6 +159,9 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         pdf = render_invoice_pdf(invoice)
         filename = f"{invoice.invoice_number or 'facture-brouillon'}.pdf"
         response = HttpResponse(pdf, content_type="application/pdf")
+        response["Cache-Control"] = "private, no-store, max-age=0"
+        response["Pragma"] = "no-cache"
+        response["X-Content-Type-Options"] = "nosniff"
         disposition = "inline" if inline else "attachment"
         response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
         record_audit_event(
@@ -160,7 +183,11 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         return self._pdf_response(inline=True)
 
     def destroy(self, request, *args, **kwargs):
-        return Response({"detail": "Invoices are cancelled, not deleted."}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        try:
+            delete_invoice(invoice=self.get_object(), actor=request.user, request=request)
+        except DjangoValidationError as error:
+            return Response(drf_validation(error), status=status.HTTP_400_BAD_REQUEST)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class InvoiceItemViewSet(viewsets.ModelViewSet):

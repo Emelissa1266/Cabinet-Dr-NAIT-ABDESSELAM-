@@ -199,3 +199,102 @@ class MedicalInstruction(models.Model):
 
     def __str__(self) -> str:
         return self.title
+
+
+class WorkLeave(models.Model):
+    class Status(models.TextChoices):
+        DRAFT = "DRAFT", "Brouillon"
+        ISSUED = "ISSUED", "Émis"
+        CANCELLED = "CANCELLED", "Annulé"
+
+    class LeaveType(models.TextChoices):
+        INITIAL = "INITIAL", "Initial"
+        EXTENSION = "EXTENSION", "Prolongation"
+
+    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="work_leaves")
+    consultation = models.ForeignKey(
+        Consultation, on_delete=models.PROTECT, null=True, blank=True, related_name="work_leaves"
+    )
+    doctor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="work_leaves"
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="created_work_leaves"
+    )
+    certificate_number = models.CharField(max_length=24, unique=True, editable=False)
+    leave_type = models.CharField(
+        max_length=12, choices=LeaveType.choices, default=LeaveType.INITIAL
+    )
+    previous_leave = models.ForeignKey(
+        "self", on_delete=models.PROTECT, null=True, blank=True, related_name="extensions"
+    )
+    issued_date = models.DateField()
+    start_date = models.DateField()
+    end_date = models.DateField()
+    duration_days = models.PositiveIntegerField(default=1, editable=False)
+    medical_reason = models.TextField(blank=True)
+    internal_notes = models.TextField(blank=True)
+    patient_instructions = models.TextField(blank=True)
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.DRAFT, editable=False
+    )
+    issued_at = models.DateTimeField(null=True, blank=True, editable=False)
+    cancelled_at = models.DateTimeField(null=True, blank=True, editable=False)
+    cancellation_reason = models.TextField(blank=True, editable=False)
+    patient_name_snapshot = models.CharField(max_length=320, blank=True, editable=False)
+    patient_birth_date_snapshot = models.DateField(null=True, blank=True, editable=False)
+    doctor_name_snapshot = models.CharField(max_length=320, blank=True, editable=False)
+    certificate_text_snapshot = models.TextField(blank=True, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-issued_date", "-id")
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(end_date__gte=models.F("start_date")),
+                name="work_leave_valid_dates",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(duration_days__gte=1), name="work_leave_positive_duration"
+            ),
+        ]
+        indexes = [models.Index(fields=("doctor", "patient", "status"))]
+
+    def clean(self):
+        validate_doctor(self.doctor)
+        if self.consultation_id and (
+            self.consultation.patient_id != self.patient_id
+            or self.consultation.doctor_id != self.doctor_id
+        ):
+            raise ValidationError(
+                {"consultation": "La consultation doit appartenir au patient et au médecin."}
+            )
+        if self.start_date and self.end_date:
+            if self.end_date < self.start_date:
+                raise ValidationError({"end_date": "La fin ne peut pas précéder le début."})
+            self.duration_days = (self.end_date - self.start_date).days + 1
+        if self.leave_type == self.LeaveType.EXTENSION:
+            if not self.previous_leave_id:
+                raise ValidationError({"previous_leave": "Sélectionnez un arrêt précédent émis."})
+            previous = self.previous_leave
+            if (
+                previous.pk == self.pk
+                or previous.patient_id != self.patient_id
+                or previous.doctor_id != self.doctor_id
+            ):
+                raise ValidationError(
+                    {
+                        "previous_leave": "L'arrêt précédent doit appartenir au même patient et médecin."
+                    }
+                )
+            if previous.status != self.Status.ISSUED or self.start_date <= previous.end_date:
+                raise ValidationError(
+                    {
+                        "previous_leave": "La prolongation doit commencer après la fin d'un arrêt émis."
+                    }
+                )
+        elif self.previous_leave_id:
+            raise ValidationError(
+                {"previous_leave": "Un arrêt initial ne référence pas d'arrêt précédent."}
+            )

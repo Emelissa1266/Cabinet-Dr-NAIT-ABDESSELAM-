@@ -67,7 +67,7 @@ def validate_no_time_off(*, staff_id, start_at, end_at):
 
 def validate_no_closure(*, start_at, end_at):
     if ClinicClosure.objects.filter(start_at__lt=end_at, end_at__gt=start_at).exists():
-        raise ValidationError("Appointment overlaps a clinic closure.")
+        raise ValidationError("Ce créneau chevauche une fermeture du cabinet.")
 
 
 def validate_no_conflicts(*, staff_ids, start_at, end_at, exclude_appointment_id=None, lock=True):
