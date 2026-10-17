@@ -11,7 +11,7 @@ from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
-from django.db import connection, transaction, OperationalError
+from django.db import OperationalError, connection, transaction
 from django.db.migrations.executor import MigrationExecutor
 from django.db.models import Sum
 from django.db.models.signals import post_save
@@ -24,23 +24,54 @@ from apps.audit.models import AuditLog
 from apps.billing import services as billing
 from apps.billing.models import Invoice
 from apps.care import services as care_services
-from apps.care.models import (Care, CareCategory, CareType, CareSession, CareObservation,
-    ClinicalMeasurement, CareSessionMaterial, CareParameterDefinition, CareSessionParameter)
+from apps.care.models import (
+    Care,
+    CareCategory,
+    CareObservation,
+    CareParameterDefinition,
+    CareSession,
+    CareSessionMaterial,
+    CareSessionParameter,
+    CareType,
+    ClinicalMeasurement,
+)
 from apps.medical.models import Consultation, Prescription, PrescriptionItem
 from apps.notifications.models import Notification
-from apps.patients.models import Patient, PatientAllergy, PatientMedicalHistory, MedicalAlert, PatientClinicalNote
+from apps.patients.models import (
+    MedicalAlert,
+    Patient,
+    PatientAllergy,
+    PatientClinicalNote,
+    PatientMedicalHistory,
+)
 from apps.payments import services as payments
 from apps.payments.models import Payment, Receipt
 from apps.surgery import services as surgery_services
 from apps.surgery.models import (
-    Surgery, InterventionType, PreoperativeAssessment, PreoperativeChecklistItem,
-    SurgeryPreoperativeChecklist, SurgeryConsent, SurgeryOperativeRecord,
-    PostoperativeAssessment, PostoperativeFollowUp,
-    SurgeryTeamMember, AnesthesiaRecord, PreoperativeRequirement,
+    AnesthesiaRecord,
+    InterventionType,
+    PostoperativeAssessment,
+    PostoperativeFollowUp,
+    PreoperativeAssessment,
+    PreoperativeChecklistItem,
+    PreoperativeRequirement,
+    Surgery,
+    SurgeryConsent,
+    SurgeryOperativeRecord,
+    SurgeryPreoperativeChecklist,
+    SurgeryTeamMember,
 )
 
 MARKER = "SEED_DEMO_V1"
-COUNTS = dict(patients=150, consultations=250, surgeries=60, sessions=180, appointments=300, invoices=200, payments=150)
+COUNTS = {
+    "patients": 150,
+    "consultations": 250,
+    "surgeries": 60,
+    "sessions": 180,
+    "appointments": 300,
+    "invoices": 200,
+    "payments": 150,
+}
 ROLES = (("admin", "ADMIN", 1), ("doctor", "DOCTOR", 2), ("nurse", "NURSE", 3), ("secretary", "SECRETARY", 2))
 
 
@@ -52,17 +83,23 @@ def create(model, **values):
 
 
 def demo_pdf():
-    """Reuse the existing PDF serializer; no optional dependency required."""
-    from apps.billing.pdf import _InvoicePdfBuilder, _Page
-    builder = _InvoicePdfBuilder.__new__(_InvoicePdfBuilder)
-    builder.pages = [_Page(operations=[
-        "BT /F1 20 Tf 48 760 Td (DOCUMENT FICTIF \\227 TEST) Tj ET",
-        "BT /F1 12 Tf 48 720 Td (Jeu de demonstration - aucune valeur medicale.) Tj ET",
-    ])]
-    builder.logo = None
-    builder.page = builder.pages[0]
-    builder.invoice_number = "DEMO - TEST"
-    return builder._serialize()
+    """Build a fictional document with the shared production PDF layout."""
+    from io import BytesIO
+
+    from reportlab.platypus import Paragraph
+
+    from config.pdf_layout import document, page_furniture, styles
+
+    stream = BytesIO()
+    theme = styles()
+    pdf = document(stream, "Document fictif de demonstration")
+    story = [
+        Paragraph("DOCUMENT FICTIF - TEST", theme["title"]),
+        Paragraph("Jeu de demonstration - aucune valeur medicale.", theme["body"]),
+    ]
+    furniture = page_furniture("DEMO - TEST")
+    pdf.build(story, onFirstPage=furniture, onLaterPages=furniture)
+    return stream.getvalue()
 
 
 class Command(BaseCommand):
@@ -401,11 +438,11 @@ class Command(BaseCommand):
                 create(Notification, recipient=staff, notification_type="APPOINTMENT", title="DEMO - Rendez-vous a venir", message="Evenement fictif pour les tests", patient=a.patient, appointment=a, deduplication_key=f"seed-demo-appointment-{a.pk}")
         invoices = []
         # Distinct clinical sources, including invoices owned independently by nurses.
-        sources = [("consultation", c, c.patient, c.doctor, c.consultation_date.date(), Decimal("5000")) for c in consultations[:n['invoices']//2]]
+        sources = [("consultation", c, c.patient, c.doctor, c.consultation_date.date(), Decimal(5000)) for c in consultations[:n['invoices']//2]]
         sources += [("care", s.care, s.care.patient, s.nurse, s.care.start_date, s.care.price_per_session) for s in sessions if s.status == "COMPLETED"][:n['invoices']//4]
-        sources += [("surgery", s, s.patient, s.surgeon, s.planned_date.date(), Decimal("120000")) for s in surgeries if s.status == "COMPLETED"]
+        sources += [("surgery", s, s.patient, s.surgeon, s.planned_date.date(), Decimal(120000)) for s in surgeries if s.status == "COMPLETED"]
         used = {obj.pk for key,obj,*_ in sources if key == "consultation"}
-        sources += [("consultation", c, c.patient, c.doctor, c.consultation_date.date(), Decimal("5000")) for c in consultations if c.pk not in used]
+        sources += [("consultation", c, c.patient, c.doctor, c.consultation_date.date(), Decimal(5000)) for c in consultations if c.pk not in used]
         for i, (key,obj,p,actor,day,price) in enumerate(sources[:n["invoices"]]):
             inv = billing.create_invoice(actor=actor, patient=p, issue_date=day, due_date=day+timedelta(days=30), currency="DZD", notes="FACTURE FICTIVE - TEST")
             billing.create_invoice_item(actor=actor, invoice=inv, **{key: obj}, description=f"DEMO - {key}", unit_price=price)
@@ -434,10 +471,11 @@ class Command(BaseCommand):
         self.create_documents(patients, admin)
 
     def create_documents(self, patients, actor):
-        # Reuse the project's existing dependency-free PDF writer.
+        # Reuse the project's shared PDF layout.
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
         from apps.documents.models import DocumentCategory
         from apps.documents.services import upload_document
-        from django.core.files.uploadedfile import SimpleUploadedFile
         category = create(DocumentCategory, code="seed-demo-document", name="DEMO - Documents fictifs", system_type="CLINICAL")
         for p in patients[:max(1, len(patients)//10)]:
             content = demo_pdf()

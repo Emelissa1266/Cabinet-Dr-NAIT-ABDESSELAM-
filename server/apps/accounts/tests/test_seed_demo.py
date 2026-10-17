@@ -4,8 +4,9 @@ import pytest
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import transaction
+from pypdf import PdfReader
 
-from apps.accounts.management.commands.seed_demo import Command, COUNTS, MARKER
+from apps.accounts.management.commands.seed_demo import COUNTS, MARKER, Command
 from apps.accounts.models import User
 from apps.audit.models import AuditLog
 from apps.billing.models import Invoice
@@ -58,7 +59,7 @@ def test_medium_dataset_integrity_api_and_safe_reset(tmp_path, monkeypatch):
         assert doc.file.storage.exists(doc.file.name)
         assert doc.file.name.startswith("secure/documents/")
         with doc.file.open("rb") as stream:
-            assert b"DOCUMENT FICTIF" in stream.read()
+            assert "DOCUMENT FICTIF" in PdfReader(stream).pages[0].extract_text()
     for payment in Payment.objects.all():
         assert payment.allocated_amount <= payment.amount
         assert payment.payment_number.startswith("PAY-")
@@ -66,8 +67,9 @@ def test_medium_dataset_integrity_api_and_safe_reset(tmp_path, monkeypatch):
     assert Receipt.objects.exclude(receipt_number__startswith="REC-").count() == 0
     existing.refresh_from_db()
     assert existing.password == original_password
-    from apps.dashboard.services import get_dashboard_for_user
     from rest_framework.test import APIClient
+
+    from apps.dashboard.services import get_dashboard_for_user
     for role in User.Role.values:
         actor = User.objects.filter(role=role, username__startswith="seed.demo.").first()
         assert get_dashboard_for_user(actor)
@@ -114,7 +116,7 @@ def test_dry_run_idempotence_and_rollback(tmp_path, monkeypatch):
     monkeypatch.setattr(Command, "check_target", lambda self: None)
     monkeypatch.setenv("CLINIC_DEMO_PASSWORD", "Fixture-Only-Random-Password!42")
     def sqlite_test_sql(execute, sql, params, many, context):
-        if sql.startswith("SELECT pg_advisory_xact_lock") or sql.startswith("SET CONSTRAINTS"):
+        if sql.startswith(("SELECT pg_advisory_xact_lock", "SET CONSTRAINTS")):
             return None
         return execute(sql, params, many, context)
     with connection.execute_wrapper(sqlite_test_sql):

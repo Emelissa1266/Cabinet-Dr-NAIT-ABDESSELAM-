@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 import pytest
+
 from apps.audit.models import AuditLog
 from apps.billing.models import Invoice, InvoiceItem
 from apps.patients.models import Patient
@@ -119,7 +120,7 @@ def test_summary_aggregates_all_pages_and_excludes_drafts(api_client, doctor_use
     patient = Patient.objects.create(first_name="All", last_name="Pages")
     for _ in range(25):
         invoice = create_invoice(patient=patient, actor=doctor_user)
-        create_invoice_item(invoice=invoice, actor=doctor_user, description="Line", quantity=Decimal("1"), unit_price=Decimal("100"))
+        create_invoice_item(invoice=invoice, actor=doctor_user, description="Line", quantity=Decimal(1), unit_price=Decimal(100))
         issue_invoice(invoice=invoice, actor=doctor_user)
     create_invoice(patient=patient, actor=doctor_user)
     api_client.force_authenticate(doctor_user)
@@ -150,13 +151,14 @@ def test_cookie_jwt_csrf_protects_create_edit_and_delete(doctor_user):
 
 def test_patient_change_preserves_clinical_source_integrity(api_client, doctor_user):
     from django.utils import timezone
-    from apps.medical.models import Consultation
+
     from apps.billing.services import create_invoice, create_invoice_item
+    from apps.medical.models import Consultation
     patient = Patient.objects.create(first_name="Source", last_name="Original")
     other = Patient.objects.create(first_name="Other", last_name="Patient")
     consultation = Consultation.objects.create(patient=patient, doctor=doctor_user, consultation_date=timezone.now(), reason="Clinical source")
     invoice = create_invoice(patient=patient, actor=doctor_user)
-    item = create_invoice_item(invoice=invoice, actor=doctor_user, consultation=consultation, description="Consultation", quantity=Decimal("1"), unit_price=Decimal("1000"))
+    item = create_invoice_item(invoice=invoice, actor=doctor_user, consultation=consultation, description="Consultation", quantity=Decimal(1), unit_price=Decimal(1000))
     api_client.force_authenticate(doctor_user)
     response = api_client.patch(f"/api/v1/invoices/{invoice.pk}/", {"patient": other.pk, "notes": "Rollback"}, format="json")
     assert response.status_code == 400, response.data
@@ -170,7 +172,7 @@ def test_nurse_summary_keeps_workspace_scope(api_client, nurse_user, doctor_user
     patient = Patient.objects.create(first_name="Scope", last_name="Invoice")
     for actor, amount in [(nurse_user, "500"), (doctor_user, "1000")]:
         invoice = create_invoice(patient=patient, actor=actor)
-        create_invoice_item(invoice=invoice, actor=actor, description="Scope", quantity=Decimal("1"), unit_price=Decimal(amount))
+        create_invoice_item(invoice=invoice, actor=actor, description="Scope", quantity=Decimal(1), unit_price=Decimal(amount))
         issue_invoice(invoice=invoice, actor=actor)
     api_client.force_authenticate(nurse_user)
     response = api_client.get("/api/v1/invoices/summary/")

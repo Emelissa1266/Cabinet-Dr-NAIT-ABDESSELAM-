@@ -1,0 +1,36 @@
+{
+	local_certs
+	admin off
+}
+
+{$LAN_HOSTNAME:cabinet.local} {
+	tls internal
+	encode zstd gzip
+
+	request_body {
+		max_size 25MB
+	}
+
+	@backend path /api/* /admin/* /static/*
+	handle @backend {
+		reverse_proxy backend:8000
+	}
+
+	handle {
+		reverse_proxy frontend:3000
+	}
+
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "same-origin"
+		Permissions-Policy "camera=(), geolocation=(), microphone=()"
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

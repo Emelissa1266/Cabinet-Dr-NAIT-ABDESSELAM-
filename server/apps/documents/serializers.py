@@ -11,7 +11,13 @@ from .models import (
     DocumentCategory,
 )
 from .permissions import is_care_relevant, is_patient_care_relevant
-from .services import create_photo_comparison, save_photo_set, update_clinical_photo, upload_clinical_photo, upload_document
+from .services import (
+    create_photo_comparison,
+    save_photo_set,
+    update_clinical_photo,
+    upload_clinical_photo,
+    upload_document,
+)
 
 
 def raise_drf_validation(error):

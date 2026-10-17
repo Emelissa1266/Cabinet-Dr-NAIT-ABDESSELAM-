@@ -1,0 +1,17 @@
+FROM python:3.13.9-slim-bookworm@sha256:b685a4fa58bb19d1814d78a1ec0f0208f351452724f78b20212c984d6e124a34
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+RUN groupadd --gid 10001 clinic && useradd --uid 10001 --gid clinic --create-home --shell /usr/sbin/nologin clinic
+COPY requirements ./requirements
+RUN pip install --requirement requirements/production.txt
+COPY --chown=clinic:clinic . .
+RUN mkdir -p /app/private_media /app/staticfiles && chown -R clinic:clinic /app/private_media /app/staticfiles
+
+USER clinic
+EXPOSE 8000
+CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--threads", "2", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-"]

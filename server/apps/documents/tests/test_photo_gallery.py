@@ -1,16 +1,23 @@
+# ruff: noqa: F811
+
 from io import BytesIO
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test.utils import CaptureQueriesContext
 from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from PIL import Image
 
 from apps.audit.models import AuditLog
-from apps.documents.models import ClinicalPhoto, ClinicalPhotoComparison, ClinicalPhotoSet
-from apps.documents.storage import private_media_storage
-from .test_documents_phase7 import (
-    assign_nurse_care, image_file, other_patient, patient, private_storage, upload_photo,
+from apps.documents.models import ClinicalPhoto, ClinicalPhotoComparison
+
+from .test_documents_phase7 import (  # noqa: F401
+    assign_nurse_care,
+    image_file,
+    other_patient,
+    patient,
+    private_storage,
+    upload_photo,
 )
 
 pytestmark = pytest.mark.django_db

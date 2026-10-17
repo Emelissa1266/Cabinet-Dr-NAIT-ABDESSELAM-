@@ -1,0 +1,248 @@
+name: clinic-production
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-backend-env: &backend-env
+  DJANGO_SETTINGS_MODULE: config.settings.production
+  DATABASE_URL: postgresql://${APP_DB_USER}:${APP_DB_PASSWORD}@database:5432/${POSTGRES_DB}
+  LAN_HOSTNAME: ${LAN_HOSTNAME:-cabinet.local}
+
+services:
+  database:
+    image: postgres:16.10-alpine3.22@sha256:029660641a0cfc575b14f336ba448fb8a75fd595d42e1fa316b9fb4378742297
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      APP_DB_USER: ${APP_DB_USER}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+      TZ: ${TZ:-Africa/Algiers}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./deploy/postgres-init.sh:/docker-entrypoint-initdb.d/10-clinic-app-role.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+    stop_grace_period: 60s
+    mem_limit: ${POSTGRES_MEMORY_LIMIT:-1g}
+    cpus: ${POSTGRES_CPU_LIMIT:-2.0}
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - private
+    logging: *default-logging
+
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile.production
+    env_file:
+      - ${PRODUCTION_ENV_FILE:-./server/.env.production}
+    environment:
+      <<: *backend-env
+    command:
+      - sh
+      - -c
+      - >-
+        python manage.py migrate --noinput &&
+        python manage.py collectstatic --noinput &&
+        exec gunicorn config.wsgi:application
+        --bind 0.0.0.0:8000
+        --workers $${GUNICORN_WORKERS:-3}
+        --threads $${GUNICORN_THREADS:-2}
+        --timeout $${GUNICORN_TIMEOUT:-120}
+        --access-logfile - --error-logfile -
+    volumes:
+      - private_media:/app/private_media
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python -c "import os, urllib.request;
+          request = urllib.request.Request(
+          'http://127.0.0.1:8000/api/v1/health/',
+          headers={'Host': os.environ['LAN_HOSTNAME'], 'X-Forwarded-Proto': 'https'});
+          urllib.request.urlopen(request, timeout=5).read()"
+      interval: 15s
+      timeout: 6s
+      retries: 10
+      start_period: 45s
+    restart: unless-stopped
+    stop_grace_period: 45s
+    mem_limit: ${BACKEND_MEMORY_LIMIT:-1g}
+    cpus: ${BACKEND_CPU_LIMIT:-2.0}
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - private
+    logging: *default-logging
+
+  scheduler:
+    build:
+      context: ./server
+      dockerfile: Dockerfile.production
+    env_file:
+      - ${PRODUCTION_ENV_FILE:-./server/.env.production}
+    environment:
+      <<: *backend-env
+    command:
+      - sh
+      - -c
+      - >-
+        while true; do
+          python manage.py generate_reminders;
+          sleep $${REMINDER_INTERVAL_SECONDS:-300};
+        done
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: ${SCHEDULER_MEMORY_LIMIT:-256m}
+    cpus: ${SCHEDULER_CPU_LIMIT:-0.5}
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - private
+    logging: *default-logging
+
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile.production
+      args:
+        NEXT_PUBLIC_API_BASE_URL: /api/v1
+        NEXT_PUBLIC_CSRF_COOKIE_NAME: ${CSRF_COOKIE_NAME:-clinic_csrftoken}
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1:3000/login"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    mem_limit: ${FRONTEND_MEMORY_LIMIT:-768m}
+    cpus: ${FRONTEND_CPU_LIMIT:-1.0}
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - private
+    logging: *default-logging
+
+  proxy:
+    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    environment:
+      LAN_HOSTNAME: ${LAN_HOSTNAME:-cabinet.local}
+    ports:
+      - "${LAN_BIND_IP:-0.0.0.0}:80:80"
+      - "${LAN_BIND_IP:-0.0.0.0}:443:443"
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    mem_limit: ${PROXY_MEMORY_LIMIT:-256m}
+    cpus: ${PROXY_CPU_LIMIT:-0.5}
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - edge
+      - private
+    logging: *default-logging
+
+  backup:
+    build:
+      context: ./deploy/backup
+      dockerfile: Dockerfile
+    environment:
+      PGHOST: database
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB}
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      APP_DB_USER: ${APP_DB_USER}
+      RESTIC_REPOSITORY: /repository/restic
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD}
+      BACKUP_DATABASE_INTERVAL_HOURS: ${BACKUP_DATABASE_INTERVAL_HOURS:-6}
+      BACKUP_DAILY_HOUR: ${BACKUP_DAILY_HOUR:-2}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+      BACKUP_RETENTION_MONTHS: ${BACKUP_RETENTION_MONTHS:-12}
+      TZ: ${TZ:-Africa/Algiers}
+    volumes:
+      - ${BACKUP_DESTINATION}:/repository
+      - private_media:/source/private_media:ro
+      - caddy_data:/source/caddy_data:ro
+      - ${PRODUCTION_ENV_FILE:-./server/.env.production}:/source/config/.env.production:ro
+      - ./compose.production.yaml:/source/config/compose.production.yaml:ro
+      - ./deploy/caddy/Caddyfile:/source/config/Caddyfile:ro
+      - ./deploy/runtime/backup-status:/status
+      - ./deploy/runtime/restore:/restore
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: ${BACKUP_MEMORY_LIMIT:-512m}
+    cpus: ${BACKUP_CPU_LIMIT:-1.0}
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - private
+    logging: *default-logging
+
+  restore:
+    profiles: ["tools"]
+    build:
+      context: ./deploy/backup
+      dockerfile: Dockerfile
+    environment:
+      PGHOST: database
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB}
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      APP_DB_USER: ${APP_DB_USER}
+      RESTIC_REPOSITORY: /repository/restic
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD}
+      TZ: ${TZ:-Africa/Algiers}
+    volumes:
+      - ${BACKUP_DESTINATION}:/repository
+      - private_media:/live/private_media
+      - caddy_data:/live/caddy_data
+      - ./deploy/runtime/restore:/restore
+    depends_on:
+      database:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - private
+
+volumes:
+  postgres_data:
+  private_media:
+  caddy_data:
+  caddy_config:
+
+networks:
+  edge:
+  private:
+    internal: true
